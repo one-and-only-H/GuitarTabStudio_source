@@ -24,11 +24,11 @@ constexpr int NUM_HARMONICS = 7;
 constexpr double PI = 3.14159265358979323846;
 
 // Overdrive
-constexpr float OD_DIAL_MIN = 0.235f; //pq si, tomé la decision a las 2am y aun no me acuerdo pq
+constexpr float OD_DIAL_MIN = 0.235f;
 constexpr float OD_DIAL_MAX = 2.5f;
 constexpr float OD_BOOST = 2.5f;
 
-// Limitador
+// Limitador (solo para casos extremos o efectos)
 constexpr float LIMITADOR_UMBRAL = 0.8f;
 
 // EQ (ganancia de cada banda: 0.1 = -20dB, 1.0 = neutro, 2.0 = +6dB)
@@ -40,6 +40,9 @@ constexpr float EQ_GAIN_NEUTRO = 1.0f;
 constexpr float CHORUS_DELAY_BASE = 0.015f;  // 15ms
 constexpr float CHORUS_DELAY_MOD = 0.005f;   // ±5ms de modulación
 constexpr int CHORUS_BUFFER_SIZE = 4096;      // ~93ms a 44.1kHz
+
+// Tamaño del bloque de audio (en muestras)
+constexpr int BLOQUE_MUESTRAS = 2048;         // ~46ms a 44.1kHz
 
 // ============================================================
 // STRUCTS
@@ -68,17 +71,15 @@ struct NotaSonando {
     float duracionTotal;
     float tiempoTranscurrido;
     float timestampInicio;
+    float volumenVelocity; // 0.0 a 1.0 (derivado de la velocidad MIDI)
+    
     float frecuencias[NUM_HARMONICS];
     float fases[NUM_HARMONICS];
     EnvolventeADSR envolventes[NUM_HARMONICS];
-    PerfilArmonico perfil; // Perfil específico (combinación pastilla + ataque)
+    PerfilArmonico perfil;
 };
 
 // --- EQ (Biquad) ---
-//oh if only this was made in a pcb with resistors and capacitors, but alas, we are in the digital realm
-//take me baaack to the analog days of guitar pedals, where warmth was a given and not a parameter to tweak
-//gracias IA por decirme como se hace un amplificador con codigo
-//ah pero se cae cuando necesito ayuda para hacer las funciones del mapper, y vuelve cuando solo falta audio
 struct BiquadCoef {
     float b0, b1, b2, a1, a2;
 };
@@ -100,10 +101,11 @@ struct EQEstados {
     BiquadEstado treble;
 };
 
-// FUNCIONES de bajo nivel que voy a llamar en el .cpp
+// ============================================================
+// FUNCIONES PRIMITIVAS (inline)
+// ============================================================
 
-
-// 1. MIDI a Frecuencia (La4 = midi 69 = 440 Hz)
+// 1. MIDI a Frecuencia (La4 = 69 = 440 Hz)
 inline float obtenerFrecuencia(int pitch) {
     return 440.0f * std::pow(2.0f, (pitch - 69) / 12.0f);
 }
@@ -144,7 +146,6 @@ inline void generarPreSamples(
 inline PerfilArmonico obtenerPerfil(TipoPastilla pastilla, TipoAtaque ataque) {
     PerfilArmonico perfil{};
     
-    // Pesos y decaimientos según pastilla
     if (pastilla == TipoPastilla::SINGLE_COIL) {
         float p[] = {1.0f, 0.8f, 0.7f, 0.6f, 0.5f, 0.4f, 0.3f};
         float d[] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
@@ -157,7 +158,6 @@ inline PerfilArmonico obtenerPerfil(TipoPastilla pastilla, TipoAtaque ataque) {
         std::copy(d, d + NUM_HARMONICS, perfil.tasasDecaimiento);
     }
     
-    // Ataques, sustain y releases según ataque
     if (ataque == TipoAtaque::LET_RING) {
         float a[] = {0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f};
         float s[] = {0.80f, 0.70f, 0.60f, 0.50f, 0.40f, 0.30f, 0.20f};
@@ -187,9 +187,7 @@ inline float avanzarADSR(
     float duracionTotal,
     float tiempoTranscurrido,
     float sampleRate
-)
-{ 
-    
+) {
     float dt = 1.0f / sampleRate;
     env.tiempoEnEstado += dt;
 
@@ -296,13 +294,18 @@ inline float aplicarOverdrive(float muestra, float dialGain, bool odActivo) {
     return std::tanh(a * muestra);
 }
 
-// 13. LFO del Chorus (onda senoidal modulada)
-inline float lfoChorus(float tiempo, float rate) {
-    return std::sin(2.0f * static_cast<float>(PI) * rate * tiempo);
+
+// 13. LFO del Chorus con acumulador de fase
+inline float lfoChorus(float& faseLFO, float rate, float sampleRate) {
+    faseLFO += (2.0f * static_cast<float>(PI) * rate) / sampleRate;
+    if (faseLFO >= 2.0f * static_cast<float>(PI)) {
+        faseLFO -= 2.0f * static_cast<float>(PI);
+    }
+    return std::sin(faseLFO);
 }
 
-// 14. Leer el buffer circular con interpolación lineal
-inline float leerDelay(const float* buffer, int size, float posicion) {
+// 14. Leer el buffer circular del Chorus (con interpolación lineal)
+inline float leerDelayChorus(const float* buffer, int size, float posicion) {
     int idx0 = static_cast<int>(posicion) % size;
     int idx1 = (idx0 + 1) % size;
     if (idx0 < 0) idx0 += size;
@@ -311,46 +314,48 @@ inline float leerDelay(const float* buffer, int size, float posicion) {
     return buffer[idx0] * (1.0f - frac) + buffer[idx1] * frac;
 }
 
-// 15. Aplicar el Chorus (delay modulado + mezcla)
+// 15. Escribir en el buffer circular del Chorus
+inline void guardarBufferChorus(float* buffer, int& writeIndex, float muestra) {
+    buffer[writeIndex] = muestra;
+    writeIndex = (writeIndex + 1) % CHORUS_BUFFER_SIZE;
+}
+
+/// 16. Aplicar el Chorus (Actualizado para usar faseLFO)
 inline float aplicarChorus(
     float muestra,
     float* bufferDelay,
     int& writeIndex,
-    float& tiempoLFO,
+    float& faseLFO, // <-- Ahora es la fase, no el tiempo
     float sampleRate,
     float rate,
     float depth
 ) {
-    // Escribir la muestra actual en el buffer circular
-    bufferDelay[writeIndex] = muestra;
-    writeIndex = (writeIndex + 1) % CHORUS_BUFFER_SIZE;
+    guardarBufferChorus(bufferDelay, writeIndex, muestra);
     
-    // Calcular la posición de lectura (modulada por el LFO)
-    float lfo = lfoChorus(tiempoLFO, rate);
+    float lfo = lfoChorus(faseLFO, rate, sampleRate);
     float delaySamples = (CHORUS_DELAY_BASE + CHORUS_DELAY_MOD * depth * lfo) * sampleRate;
     
     float readPos = static_cast<float>(writeIndex) - delaySamples;
     while (readPos < 0.0f) readPos += CHORUS_BUFFER_SIZE;
     if (readPos >= CHORUS_BUFFER_SIZE) readPos -= CHORUS_BUFFER_SIZE;
     
-    // Leer la muestra retrasada
-    float retrasada = leerDelay(bufferDelay, CHORUS_BUFFER_SIZE, readPos);
+    float retrasada = leerDelayChorus(bufferDelay, CHORUS_BUFFER_SIZE, readPos);
     
-    // Avanzar el tiempo del LFO
-    tiempoLFO += 1.0f / sampleRate;
-    if (tiempoLFO > 10.0f) tiempoLFO -= 10.0f; // Evitar overflow
-    
-    // Mezclar señal seca + retrasada (50/50)
     return (muestra + retrasada) * 0.5f;
 }
 
-// 16. Limitador final pa q no se pase de rango
-inline float limitarFinal(float muestra) {
-    return std::tanh(muestra / LIMITADOR_UMBRAL) * LIMITADOR_UMBRAL;
+// 17. Limitador final (Soft Clip global, sin cambios de volumen entre bloques)
+inline float limitarSeñalFinal(float muestra) {
+    // Usamos un umbral de 0.9 para dejar un poco de headroom
+    constexpr float UMBRAL_LIMITE = 0.9f;
+    return std::tanh(muestra / UMBRAL_LIMITE) * UMBRAL_LIMITE;
 }
 
-// 17. Convertir float a int16_t 
-inline int16_t convertir(float muestra) {
+// 18. Convertir a int16_t (con protección defensiva)
+inline int16_t convertirPCM(float muestra) {
+    // Aunque el limitador ya lo asegura, clampeamos por si acaso
+    if (muestra > 1.0f) muestra = 1.0f;
+    if (muestra < -1.0f) muestra = -1.0f;
     return static_cast<int16_t>(muestra * MAX_PCM_VALUE);
 }
 
@@ -388,7 +393,7 @@ private:
     std::atomic<int>   paramTipoPastilla{static_cast<int>(TipoPastilla::SINGLE_COIL)};
 
     void bucleReproduccion();
-    void actualizarCoefsEQ(); // Se llama cuando cambian los dials
+    void actualizarCoefsEQ();
 
 public:
     AudioPlayer();
