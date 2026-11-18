@@ -81,7 +81,7 @@ void imprimirTablaturaManual(const Mapper::ResultadoMapeo& resultado) {
     // --- MAIN DEL TEST DE CONSOLA ---
     int main(int argc, char* argv[]) {
         // Usamos rutas absolutas para evitar problemas con el directorio de ejecución (build/)
-        std::string archivoMIDI = "C:/Users/SANDRA/Documents/guitarTabCreator/Audio files/Nirvana_Come_As_You_Are_v2.mid";
+        std::string archivoMIDI = "C:/Users/SANDRA/Documents/guitarTabCreator/Audio files/Weezer_Island_In_The_Sun (1).mid";
         std::string carpetaSongs = "C:/Users/SANDRA/Documents/guitarTabCreator/GuitarTabCreator/songs";
         std::string scriptPython = "C:/Users/SANDRA/Documents/guitarTabCreator/GuitarTabCreator/scripts/midi2csv.py";
 

@@ -5,7 +5,9 @@
 #include "../acordes.h"
 #include "../tipos.h"
 #include "motor_melodico.h"
+#include "motor_armonico.h"
 
+#include <iostream>
 #include <vector>
 #include <algorithm>
 #include <cmath>
@@ -113,30 +115,30 @@ ResultadoMapeo mapear(const std::vector<Nota>& notasRaw) {
     auto resultadosMelodicos =
     MotorMelodico::mapear(timeline, ctx.config);
 
-auto resultadosArmonicos =
-    MotorArmonico::mapear(timeline, ctx.config);
+    auto resultadosArmonicos =
+        MotorArmonico::mapear(timeline, ctx.config);
 
 // DIAGNÓSTICO TEMPORAL
-std::cout << "\n=== MOTOR ARMONICO ===\n";
+    std::cout << "\n=== MOTOR ARMONICO ===\n";
 
-std::cout << "Eventos en timeline: "
-          << timeline.size() << '\n';
+    std::cout << "Eventos en timeline: "
+              << timeline.size() << '\n';
 
-std::cout << "Resultados armonicos: "
-          << resultadosArmonicos.size() << '\n';
+    std::cout << "Resultados armonicos: "
+              << resultadosArmonicos.size() << '\n';
 
-for (const auto& r : resultadosArmonicos) {
-    std::cout << "Evento en t="
-              << r.eventoOriginal.timestamp
-              << " | Notas: "
-              << r.eventoOriginal.notas.size()
-              << " | Voicing: ";
+    for (const auto& r : resultadosArmonicos) {
+        std::cout << "Evento en t="
+                  << r.eventoOriginal.timestamp
+                  << " | Notas: "
+                << r.eventoOriginal.notas.size()
+                << " | Voicing: ";
 
-    for (const auto& p : r.candidato.posiciones) {
-        std::cout << "[C" << p.cuerda
-                  << ", T" << p.traste
-                  << ", P" << p.pitch << "] ";
-    }
+        for (const auto& p : r.candidato.posiciones) {
+            std::cout << "[C" << p.cuerda
+                      << ", T" << p.traste
+                      << ", P" << p.pitch << "] ";
+        }
 
     std::cout << '\n';
 }
