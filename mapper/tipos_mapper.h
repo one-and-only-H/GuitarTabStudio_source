@@ -6,6 +6,8 @@
 
 #include <string>
 #include <vector>
+#include <cstddef>
+
 
 // Parámetros de configuración del mapper
 struct ConfigMapper {
@@ -37,7 +39,7 @@ struct ConfigMapper {
     double w_d_armonico = 0.10;
     double w_f_armonico = 0.15;
     double w_s_armonico = 0.4; // Peso para penalizar saltos entre cuerdas
-    
+
         // Pesos de transición melódica
     double w_transicion_traste = 0.70;
     double w_transicion_cuerda = 0.30;
@@ -88,4 +90,10 @@ struct Warning {
     int pitch = -1;
 };
 
+// Resultado de mapear una nota melódica.
+struct ResultadoMelodico {
+    std::size_t indiceTimeline = 0;
+    Nota notaOriginal;
+    CandidatoMelodico candidato;
+};
 #endif
