@@ -61,13 +61,23 @@ std::vector<InstanteTimeline> construirTimeline(const SongContext& ctx) {
     for (size_t i = 0; i < tiempos.size(); ++i) {
         InstanteTimeline inst;
         inst.inicio = tiempos[i];
-        inst.fin = (i + 1 < tiempos.size()) ? tiempos[i + 1] : inst.inicio + 1.0;
+        
 
         // Buscar notas que atacan exactamente en este instante
         for (const auto& n : ctx.notas) {
             if (std::abs(n.timestamp - inst.inicio) < 1e-4) {
                 inst.notasAtacadas.push_back(n);
             }
+        }
+         if (i + 1 < tiempos.size()) {
+            inst.fin = tiempos[i + 1];
+        } else {
+            // Último instante: usar la duración máxima de sus notas
+            double maxDur = 0.0;
+            for (const auto& n : inst.notasAtacadas) {
+                maxDur = std::max(maxDur, n.duracion);
+            }
+            inst.fin = inst.inicio + maxDur; // Si maxDur es 0, será inst.inicio
         }
 
         // Buscar acorde activo (opcional, para mostrar el nombre)
@@ -93,6 +103,7 @@ std::vector<InstanteTimeline> construirTimeline(const SongContext& ctx) {
 // BLOQUE 3: ORQUESTADOR (SIN ACORDES, SOLO NOTAS)
 // ============================================================
 ResultadoMapeo mapear(const std::vector<Nota>& notasRaw) {
+    int notasDescartadas = 0;
     ResultadoMapeo res;
 
     SongContext ctx = construirContexto(notasRaw);
@@ -144,10 +155,16 @@ ResultadoMapeo mapear(const std::vector<Nota>& notasRaw) {
         if (melElegida.count(static_cast<int>(i))) {
             const auto& cand = melElegida[static_cast<int>(i)];
             
+            // Buscamos la nota original en el instante para recuperar su duración
+            const Nota* notaOriginal = nullptr;
+            auto top = *std::max_element(inst.notasAtacadas.begin(), inst.notasAtacadas.end(),
+                [](const Nota& a, const Nota& b) { return a.pitch < b.pitch; });
+            
             TabNote tn;
             tn.pitch = cand.posicion.pitch;
             tn.timestamp = inst.inicio;
-            tn.duracion = ev.duracion;
+            // AQUÍ: Usar la duración original del MIDI
+            tn.duracion = top.duracion; 
             tn.cuerda = cand.posicion.cuerda;
             tn.traste = cand.posicion.traste;
             tn.role = Role::MELODIA;
