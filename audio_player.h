@@ -81,6 +81,7 @@ struct NotaSonando {
 };
 
 // --- EQ (secciones biquad) ---
+//voy a quemar ese cookbook...
 struct BiquadCoef {
     float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, a1 = 0.0f, a2 = 0.0f;
 };
@@ -107,7 +108,7 @@ struct EQEstados {
 // ============================================================
 
 inline int16_t convertirPCM(float muestra) {
-    muestra = std::clamp(muestra, -1.0f, 1.0f);
+    muestra = std::clamp(muestra, -1.0f, 1.0f); // limitar por si acaso, poco probable igual que se pase
     return static_cast<int16_t>(muestra * MAX_PCM_VALUE);
 }
 
@@ -126,7 +127,7 @@ inline std::array<float, NUM_HARMONICS> dividirEnArmonicos(float frecuenciaFunda
 inline float generarOndaArmonico(float frecuencia, float& fase, float sampleRate) {
     const float valor = std::sin(fase);
     const float incrementoFase = (2.0f * static_cast<float>(PI) * frecuencia) / sampleRate;
-    fase = std::fmod(fase + incrementoFase, 2.0f * static_cast<float>(PI));
+    fase = std::fmod(fase + incrementoFase, 2.0f * static_cast<float>(PI)); // para mantener exactitud, siempre reiniciando cuando llegue a 2pi
     return valor;
 }
 
@@ -138,18 +139,18 @@ inline void generarPreSamples(
 ) {
     for (int i = 0; i < NUM_HARMONICS; i++) {
         presamples[i] = generarOndaArmonico(frecuencias[i], fases[i], sampleRate);
-    }
+    }//generar los NUM HARMONICS armónicos de la frecuencia fundamental
 }
 
 inline PerfilArmonico obtenerPerfil(TipoPastilla pastilla, TipoAtaque ataque) {
     PerfilArmonico perfil{};
 
-    if (pastilla == TipoPastilla::SINGLE_COIL) {
+    if (pastilla == TipoPastilla::SINGLE_COIL) { 
         const float p[] = {1.0f, 0.8f, 0.7f, 0.6f, 0.5f, 0.4f, 0.3f};
         const float d[] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
         std::copy(p, p + NUM_HARMONICS, perfil.pesos);
         std::copy(d, d + NUM_HARMONICS, perfil.tasasDecaimiento);
-    } else {
+    } else { //tipo = humbucker
         const float p[] = {1.0f, 0.9f, 0.6f, 0.3f, 0.2f, 0.1f, 0.05f};
         const float d[] = {1.0f, 1.2f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f};
         std::copy(p, p + NUM_HARMONICS, perfil.pesos);
@@ -163,7 +164,7 @@ inline PerfilArmonico obtenerPerfil(TipoPastilla pastilla, TipoAtaque ataque) {
         std::copy(a, a + NUM_HARMONICS, perfil.ataques);
         std::copy(s, s + NUM_HARMONICS, perfil.sustentos);
         std::copy(r, r + NUM_HARMONICS, perfil.releases);
-    } else {
+    } else { //tipo = muted
         const float a[] = {0.003f, 0.003f, 0.003f, 0.003f, 0.003f, 0.003f, 0.003f};
         const float s[] = {0.10f, 0.08f, 0.05f, 0.03f, 0.02f, 0.01f, 0.00f};
         const float r[] = {0.05f, 0.04f, 0.03f, 0.02f, 0.01f, 0.01f, 0.01f};
@@ -175,7 +176,7 @@ inline PerfilArmonico obtenerPerfil(TipoPastilla pastilla, TipoAtaque ataque) {
     return perfil;
 }
 
-inline float avanzarADSR(
+inline float avanzarADSR( //que dolor de cabeza 
     EnvolventeADSR& env,
     float tasaDecaimiento,
     float tiempoAtaque,
@@ -257,7 +258,7 @@ inline void aplicarEnvolventes(
         presamples[i] *= valorEnv;
     }
 }
-
+//mezcla los armónicos de la nota, segun su peso
 inline float mezclarArmonicos(const float presamples[NUM_HARMONICS], const float pesos[NUM_HARMONICS]) {
     float suma = 0.0f;
     for (int i = 0; i < NUM_HARMONICS; i++) {
@@ -268,10 +269,10 @@ inline float mezclarArmonicos(const float presamples[NUM_HARMONICS], const float
 
 inline float normalizar(float suma, int N) {
     if (N < 1) N = 1;
-    return suma / std::sqrt(static_cast<float>(N));
+    return suma / std::sqrt(static_cast<float>(N)); //con sqrt pq asi no reduce o amplia en exceso
 }
 
-inline float aplicarBiquad(float x, BiquadEstado& s, const BiquadCoef& c) {
+inline float aplicarBiquad(float x, BiquadEstado& s, const BiquadCoef& c) { //thanks Audio EQ cookbook de RBJ
     const float y = c.b0 * x + c.b1 * s.x1 + c.b2 * s.x2 - c.a1 * s.y1 - c.a2 * s.y2;
     s.x2 = s.x1;
     s.x1 = x;

@@ -2,6 +2,7 @@
 
 #include <limits>
 
+
 namespace {
 
 BiquadCoef normalizarCoeficientes(float b0, float b1, float b2,
@@ -59,6 +60,11 @@ BiquadCoef peakingEQ(float frecuencia, float ganancia, float Q, float sampleRate
     return normalizarCoeficientes(b0, b1, b2, a0, a1, a2);
 }
 
+/*
+cuando se hace seek al visor de la tab, se reconstruye el estado de la envolvente,
+osea, no va a iniciar ya en el attack de cada nota para simplificar, directamente
+busca en que momento de la ADSR estaba y continua desde ahí
+*/
 void reconstruirEnvolvente(EnvolventeADSR& env, float elapsed,
                            float duracion, float ataque, float decayRate,
                            float sustain, float release) {
@@ -121,14 +127,16 @@ NotaSonando crearNotaSonando(const Nota& nota, TipoPastilla pastilla, float elap
     const float velocidad = std::clamp(static_cast<float>(nota.velocidad) / 127.0f, 0.0f, 1.0f);
     ns.volumenVelocity = velocidad * velocidad;
 
+    //funciones que ya defini en el .h
     const float frecuenciaBase = obtenerFrecuencia(nota.pitch);
     const auto armonicos = dividirEnArmonicos(frecuenciaBase);
-    ns.perfil = obtenerPerfil(pastilla, TipoAtaque::LET_RING);
+    ns.perfil = obtenerPerfil(pastilla, TipoAtaque::LET_RING); //PLACEHOLDER, FALTA PONER Q TAMBIEN PUEDA SER MUTED
 
     for (int h = 0; h < NUM_HARMONICS; h++) {
         ns.frecuencias[h] = armonicos[h];
         ns.fases[h] = std::fmod(2.0f * static_cast<float>(PI) * armonicos[h] * elapsed,
                                2.0f * static_cast<float>(PI));
+
         reconstruirEnvolvente(ns.envolventes[h], elapsed, ns.duracionTotal,
                               ns.perfil.ataques[h], ns.perfil.tasasDecaimiento[h],
                               ns.perfil.sustentos[h], ns.perfil.releases[h]);
@@ -144,6 +152,8 @@ bool notaSigueSonando(const NotaSonando& ns) {
 }
 
 } // namespace
+
+//no me voy a pelear con windows.h, aqui entra la IA evidentemente
 
 AudioPlayer::AudioPlayer() {
     bufferPCM.resize(BLOQUE_MUESTRAS);
@@ -259,7 +269,8 @@ void AudioPlayer::bucleReproduccion() {
             if (waveOutRestart(hWaveOut) == MMSYSERR_NOERROR) dispositivoPausado = false;
         }
     };
-
+//=========================
+//empieza lo bueno
     while (reproduciendo.load()) {
         while (reproduciendo.load() && pausado.load()) {
             sincronizarPausa();
@@ -282,7 +293,7 @@ void AudioPlayer::bucleReproduccion() {
         for (int m = 0; m < BLOQUE_MUESTRAS; m++) {
             const double tiempoMuestra = tiempoCursor;
 
-            // Disparo de notas sample-accurate.
+            // Disparo de notas sample-accurate
             if (estadoFade == 0 || estadoFade == 2) {
                 while (indiceNotaActual < notasPista.size() &&
                        notasPista[indiceNotaActual].timestamp <= tiempoMuestra) {
@@ -305,7 +316,7 @@ void AudioPlayer::bucleReproduccion() {
             }
 
             const int cantidadNotas = std::max(1, static_cast<int>(notasActivas.size()));
-            float muestra = normalizar(sumaNotas, cantidadNotas);
+            float muestra = normalizar(sumaNotas, cantidadNotas); // definida en .h
 
             // Cadena: EQ -> overdrive -> chorus -> volumen de salida -> limitador.
             muestra = aplicarEQ(muestra, eqEstados, eqCoefs);
@@ -361,7 +372,9 @@ void AudioPlayer::bucleReproduccion() {
         for (int m = 0; m < BLOQUE_MUESTRAS; m++) {
             bufferPCM[m] = convertirPCM(bufferFloat[m]);
         }
-
+//=============================================
+//hola de nuevo, contendiente de windows.h
+//============================================
         if (waveOutWrite(hWaveOut, &header, sizeof(WAVEHDR)) != MMSYSERR_NOERROR) break;
 
         // Esperar al bloque actual. Pausar el dispositivo sin reutilizar el WAVEHDR.
