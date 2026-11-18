@@ -6,6 +6,11 @@
 El proyecto combina tres disciplinas: **teoría musical** (análisis armónico), **optimización algorítmica** (Viterbi) y **procesamiento digital de señales (DSP)**.
 
 ---
+## REQUISITOS
+1. compilador compatible con c++17
+2. pip install pretty_midi
+3. SO windows 10 o superior
+
 
 ## Tabla de Contenidos
 1. [Características Principales](#-características-principales)
