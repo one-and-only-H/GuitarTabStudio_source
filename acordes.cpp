@@ -138,13 +138,21 @@ std::vector<EventoArmonico> agruparNotas(
         );
     }
 
-    actual.duracion = std::max(
-        0.0,
-        finGrupo - actual.timestamp
-    );
-    actual.es_simultaneo = actual.notas.size() > 1;
+            actual.duracion = std::max(
+                0.0,
+                finGrupo - actual.timestamp
+            );
+            actual.es_simultaneo = actual.notas.size() > 1;
 
-    eventos.push_back(actual);
+            // NUEVO: Si el grupo tiene más de 6 notas, es un error de agrupación.
+            // Nos quedamos con las 6 más graves (rango de la guitarra).
+            if (actual.notas.size() > 6) {
+                std::sort(actual.notas.begin(), actual.notas.end(),
+                    [](const Nota& a, const Nota& b) { return a.pitch < b.pitch; });
+                actual.notas.resize(6);
+            }
+
+            eventos.push_back(actual);
 
     return eventos;
 }

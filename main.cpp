@@ -81,7 +81,7 @@ void imprimirTablaturaManual(const Mapper::ResultadoMapeo& resultado) {
     // --- MAIN DEL TEST DE CONSOLA ---
     int main(int argc, char* argv[]) {
         // Usamos rutas absolutas para evitar problemas con el directorio de ejecución (build/)
-        std::string archivoMIDI = "C:/Users/SANDRA/Documents/guitarTabCreator/GuitarTabCreator/midi_songs/The Long Faces - Jane! (segregated).mid";
+        std::string archivoMIDI = "C:/Users/SANDRA/Documents/guitarTabCreator/Audio files/Nirvana_Come_As_You_Are_v2.mid";
         std::string carpetaSongs = "C:/Users/SANDRA/Documents/guitarTabCreator/GuitarTabCreator/songs";
         std::string scriptPython = "C:/Users/SANDRA/Documents/guitarTabCreator/GuitarTabCreator/scripts/midi2csv.py";
 
@@ -113,13 +113,17 @@ void imprimirTablaturaManual(const Mapper::ResultadoMapeo& resultado) {
             return 1;
         }
 
-        // 3. Buscar los archivos CSV generados
-        std::string prefijo = "The Long Faces - Jane! (segregated)_";
+
+        // 3. Buscar los archivos CSV generados (automático)
+        // Extraemos el nombre base del MIDI (sin ruta ni extensión)
+        fs::path pathMidi(archivoMIDI);
+        std::string nombreBase = pathMidi.stem().string();
+        std::string prefijo = nombreBase + "_";
+        
         std::vector<std::string> archivosCSV;
         
         for (const auto& entry : fs::directory_iterator(carpetaSongs)) {
             std::string nombre = entry.path().filename().string();
-            // Usamos find para ver si el nombre empieza con el prefijo
             if (nombre.find(prefijo) == 0 && entry.path().extension() == ".csv") {
                 archivosCSV.push_back(entry.path().string());
             }

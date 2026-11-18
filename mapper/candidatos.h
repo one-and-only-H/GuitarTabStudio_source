@@ -230,10 +230,9 @@ inline double costoArmonico(
     // --------------------------------------------------------
     // 1. Altura promedio de los trastes
     // --------------------------------------------------------
-
     double sumaTrastes = 0.0;
     int cuerdasAlAire = 0;
-    int notasValidas = 0; // Contador de notas que pertenecen al evento original
+    int notasValidas = 0;
 
     int cuerdaMinima = 6;
     int cuerdaMaxima = 1;
@@ -244,7 +243,6 @@ inline double costoArmonico(
     int notasPisadas = 0;
 
     for (const auto& posicion : posiciones) {
-        // Si nos pasaron pitches permitidos, ignorar los que no estén en el evento
         if (pitchesPermitidos) {
             bool perteneceAlEvento = false;
             for (int p : *pitchesPermitidos) {
@@ -254,13 +252,11 @@ inline double costoArmonico(
                 }
             }
             if (!perteneceAlEvento) {
-                continue; // Ignorar esta nota para el cálculo de costo
+                continue;
             }
         }
         
-        // ¡ACÁ FALTABA INCREMENTAR!
         notasValidas++;
-
         sumaTrastes += posicion.traste;
 
         cuerdaMinima = std::min(cuerdaMinima, posicion.cuerda);
@@ -270,7 +266,6 @@ inline double costoArmonico(
             cuerdasAlAire++;
         }
 
-        // Las cuerdas al aire no cuentan para la extensión de la mano.
         if (posicion.traste > 0) {
             trasteMinimo = std::min(trasteMinimo, posicion.traste);
             trasteMaximo = std::max(trasteMaximo, posicion.traste);
@@ -278,210 +273,157 @@ inline double costoArmonico(
         }
     }
     
-    if (notasValidas == 0) notasValidas = 1; // Evita división por cero
+    if (notasValidas == 0) notasValidas = 1;
 
-    // ¡ACÁ CAMBIAMOS posiciones.size() POR notasValidas!
     double C_t = sumaTrastes / (notasValidas * config.traste_maximo);
 
-
     // --------------------------------------------------------
-    // 2. Extensión de la mano
+    // 2. Extensión de la mano (C_e)
     // --------------------------------------------------------
-
     double C_e = 0.0;
 
     if (notasPisadas >= 2) {
-
-        int extension =
-            trasteMaximo - trasteMinimo;
-
+        int extension = trasteMaximo - trasteMinimo;
         C_e = std::min(
             1.0,
-            static_cast<double>(
-                std::max(0, extension - config.max_hand_span)
-            ) /
+            static_cast<double>(std::max(0, extension - config.max_hand_span)) /
             std::max(1, config.max_hand_span)
         );
     }
 
-
     // --------------------------------------------------------
-    // 3. Distribución de las cuerdas
+    // 3. Distribución de las cuerdas (C_d)
     // --------------------------------------------------------
-
-    // Usar notasValidas en lugar de posiciones.size()
-    double C_d =static_cast<double>((cuerdaMaxima - cuerdaMinima + 1) - notasValidas) / 5.0;
-
+    double C_d = static_cast<double>((cuerdaMaxima - cuerdaMinima + 1) - notasValidas) / 5.0;
     C_d = std::clamp(C_d, 0.0, 1.0);
 
-
     // --------------------------------------------------------
-    // 4. Similitud con formas conocidas
+    // 4. Similitud con formas conocidas (C_f)
     // --------------------------------------------------------
-
     double C_f = 0.0;
 
-    if (root_pitch_class >= 0 &&
-        root_pitch_class < 12 &&
-        quality_index >= 0) {
+    if (root_pitch_class >= 0 && root_pitch_class < 12 && quality_index >= 0) {
+        auto similitudConForma = [&](const FormaConocida& forma) {
+            int activasForma = 0;
+            int activasCandidato = 0;
+            int interseccion = 0;
+            double sumaDiferencias = 0.0;
 
-        // Calcula la distancia entre el candidato
-        // y una forma conocida ya transpuesta.
+            for (int cuerda = 1; cuerda <= 6; cuerda++) {
+                int trasteForma = forma.trastes[cuerda - 1];
+                int trasteCandidato = trasteEnCuerda(posiciones, cuerda);
 
-        auto similitudConForma =
-            [&](const FormaConocida& forma) {
+                bool activaForma = trasteForma >= 0;
+                bool activaCandidato = trasteCandidato >= 0;
 
-                int activasForma = 0;
-                int activasCandidato = 0;
-                int interseccion = 0;
+                if (activaForma) activasForma++;
+                if (activaCandidato) activasCandidato++;
 
-                double sumaDiferencias = 0.0;
-
-                for (int cuerda = 1; cuerda <= 6; cuerda++) {
-
-                    int trasteForma =
-                        forma.trastes[cuerda - 1];
-
-                    int trasteCandidato =
-                        trasteEnCuerda(posiciones, cuerda);
-
-                    bool activaForma = trasteForma >= 0;
-                    bool activaCandidato = trasteCandidato >= 0;
-
-                    if (activaForma) {
-                        activasForma++;
-                    }
-
-                    if (activaCandidato) {
-                        activasCandidato++;
-                    }
-
-                    if (activaForma && activaCandidato) {
-
-                        interseccion++;
-
-                        sumaDiferencias +=
-                            std::abs(
-                                trasteForma - trasteCandidato
-                            );
-                    }
+                if (activaForma && activaCandidato) {
+                    interseccion++;
+                    sumaDiferencias += std::abs(trasteForma - trasteCandidato);
                 }
+            }
 
-                if (activasForma == 0) {
-                    return 1.0;
-                }
+            if (activasForma == 0) return 1.0;
 
-                // Distancia entre trastes coincidentes.
+            double distanciaTrastes = sumaDiferencias / (activasForma * config.traste_maximo);
+            int diferenciaSimetrica = activasForma + activasCandidato - 2 * interseccion;
+            double lambda = 0.30;
+            double penalizacionCuerdas = lambda * diferenciaSimetrica / 6.0;
 
-                double distanciaTrastes =
-                    sumaDiferencias /
-                    (activasForma * config.traste_maximo);
-
-                // Diferencia entre cuerdas activas.
-
-                int diferenciaSimetrica =
-                    activasForma +
-                    activasCandidato -
-                    2 * interseccion;
-
-                double lambda = 0.30;
-
-                double penalizacionCuerdas =
-                    lambda * diferenciaSimetrica / 6.0;
-
-                return std::clamp(
-                    distanciaTrastes + penalizacionCuerdas,
-                    0.0,
-                    1.0
-                );
-            };
-
-
-        // Buscar la mejor forma correspondiente
-        // a la raíz y calidad del acorde.
+            return std::clamp(distanciaTrastes + penalizacionCuerdas, 0.0, 1.0);
+        };
 
         double mejorSimilitud = 1.0;
-
         bool encontroForma = false;
-
         const auto& formas = obtenerFormasConocidas();
 
         for (const auto& forma : formas) {
+            if (forma.quality_index != quality_index) continue;
 
-            if (forma.quality_index != quality_index) {
-                continue;
-            }
-
-            int desplazamiento =
-                pitchClass(
-                    root_pitch_class -
-                    forma.root_pitch_class
-                );
-
-            // Se prueban desplazamientos cromáticos
-            // y sus equivalentes en otras octavas.
+            int desplazamiento = pitchClass(root_pitch_class - forma.root_pitch_class);
 
             for (int octava = -2; octava <= 2; octava++) {
-
-                int transposicion =
-                    desplazamiento + 12 * octava;
-
+                int transposicion = desplazamiento + 12 * octava;
                 FormaConocida formaTranspuesta = forma;
-
                 bool valida = true;
 
                 for (int& traste : formaTranspuesta.trastes) {
-
-                    if (traste < 0) {
-                        continue;
-                    }
-
+                    if (traste < 0) continue;
                     traste += transposicion;
-
-                    if (traste < 0 ||
-                        traste > config.traste_maximo) {
-
+                    if (traste < 0 || traste > config.traste_maximo) {
                         valida = false;
                         break;
                     }
                 }
 
-                if (!valida) {
-                    continue;
-                }
+                if (!valida) continue;
 
-                double similitud =
-                    similitudConForma(formaTranspuesta);
-
-                mejorSimilitud = std::min(
-                    mejorSimilitud,
-                    similitud
-                );
-
+                double similitud = similitudConForma(formaTranspuesta);
+                mejorSimilitud = std::min(mejorSimilitud, similitud);
                 encontroForma = true;
             }
         }
-
-        // Si no existe una forma compatible,
-        // no se penaliza al candidato.
 
         if (encontroForma) {
             C_f = mejorSimilitud;
         }
     }
 
+    // --------------------------------------------------------
+    // 5. Penalizar saltos entre cuerdas adyacentes (C_s)
+    // --------------------------------------------------------
+    double C_s = 0.0;
+    
+    // Ordenar posiciones por cuerda para comparar adyacentes
+    std::vector<PosicionGuitarra> ordenadas = posiciones;
+    std::sort(ordenadas.begin(), ordenadas.end(),
+        [](const PosicionGuitarra& a, const PosicionGuitarra& b) {
+            return a.cuerda < b.cuerda;
+        });
+    
+    int saltosPenalizados = 0;
+    int paresAdyacentes = 0;
+    
+    for (size_t i = 1; i < ordenadas.size(); i++) {
+        if (ordenadas[i].cuerda - ordenadas[i-1].cuerda == 1) {
+            
+            // Si alguna de las dos notas es al aire, el salto es gratis
+            if (ordenadas[i].traste == 0 || ordenadas[i-1].traste == 0) {
+                paresAdyacentes++;
+                continue;
+            }
+            
+            int delta = std::abs(ordenadas[i].traste - ordenadas[i-1].traste);
+            
+            // El estiramiento en trastes bajos es más difícil.
+            int minTraste = std::min(ordenadas[i].traste, ordenadas[i-1].traste);
+            double factorDificultad = (minTraste <= 5) ? 1.5 : 1.0;
+            
+            double deltaPenalizado = delta * factorDificultad;
+            
+            if (deltaPenalizado > config.max_hand_span) {
+                saltosPenalizados++;
+            }
+            paresAdyacentes++;
+        }
+    }
+    
+    if (paresAdyacentes > 0) {
+        C_s = static_cast<double>(saltosPenalizados) / paresAdyacentes;
+    }
 
     // --------------------------------------------------------
-    // 5. Costo total
+    // 6. Costo total
     // --------------------------------------------------------
-
     return
         config.w_t_armonico * C_t +
         config.w_e_armonico * C_e +
         config.w_d_armonico * C_d +
-        config.w_f_armonico * C_f;
+        config.w_f_armonico * C_f +
+        config.w_s_armonico * C_s;
 }
-
 
 // ============================================================
 // GENERACIÓN DE CANDIDATOS MELÓDICOS
@@ -680,17 +622,23 @@ inline std::vector<CandidatoVoicing> generarCandidatosArmonicos(
 
     std::sort(pitches.begin(), pitches.end());
 
-    // --------------------------------------------------------
+// --------------------------------------------------------
 // 2.5 Candidatos desde la biblioteca de formas conocidas
 // --------------------------------------------------------
 if (evento.root_pitch_class >= 0 && evento.quality_index >= 0) {
     const auto& formas = obtenerFormasConocidas();
+    
+    // Crear un set con los pitch classes que el MIDI realmente tiene
+    std::set<int> pitchClassesMIDI;
+    for (const Nota& n : evento.notas) {
+        if (n.pitch >= 0) pitchClassesMIDI.insert(pitchClass(n.pitch));
+    }
+
     for (const auto& forma : formas) {
         if (forma.quality_index != evento.quality_index) continue;
         
         int desplazamiento = pitchClass(evento.root_pitch_class - forma.root_pitch_class);
         
-        // Probamos octavas cercanas
         for (int octava = -1; octava <= 1; octava++) {
             int transposicion = desplazamiento + 12 * octava;
             CandidatoVoicing cand;
@@ -709,6 +657,16 @@ if (evento.root_pitch_class >= 0 && evento.quality_index >= 0) {
                 p.cuerda = c + 1;
                 p.traste = traste;
                 p.pitch = config.afinacion[c] + traste;
+                
+                // NUEVO: Verificar si esta nota existe en el MIDI
+                int pcVoicing = pitchClass(p.pitch);
+                if (pitchClassesMIDI.count(pcVoicing) == 0) {
+                    // La nota no está en el evento original. 
+                    // Si la forma tiene notas extra, descartamos el voicing.
+                    valida = false;
+                    break;
+                }
+                
                 cand.posiciones.push_back(p);
             }
             
