@@ -187,8 +187,9 @@ inline float avanzarADSR(
     float duracionTotal,
     float tiempoTranscurrido,
     float sampleRate
-) 
-    {
+)
+{ 
+    
     float dt = 1.0f / sampleRate;
     env.tiempoEnEstado += dt;
 
@@ -290,8 +291,9 @@ inline float aplicarOverdrive(float muestra, float dialGain, bool odActivo) {
     if (dialGain < OD_DIAL_MIN) dialGain = OD_DIAL_MIN;
     if (dialGain > OD_DIAL_MAX) dialGain = OD_DIAL_MAX;
     float a = dialGain + (odActivo ? OD_BOOST : 0.0f);
-    float saturada = std::tanh(a * muestra);
-    return saturada / std::tanh(a);
+    
+    // Tanh solo, sin compensación (el volumen sube con el gain y la salida de tan h ya está acotada entre +-1)
+    return std::tanh(a * muestra);
 }
 
 // 13. LFO del Chorus (onda senoidal modulada)
