@@ -422,7 +422,6 @@ inline double costoArmonico(
         config.w_t_armonico * C_t +
         config.w_e_armonico * C_e +
         config.w_d_armonico * C_d +
-        config.w_f_armonico * C_f +
         config.w_s_armonico * C_s;
 }
 
@@ -623,62 +622,7 @@ inline std::vector<CandidatoVoicing> generarCandidatosArmonicos(
 
     std::sort(pitches.begin(), pitches.end());
 
-// --------------------------------------------------------
-// 2.5 Candidatos desde la biblioteca de formas conocidas
-// --------------------------------------------------------
-if (evento.root_pitch_class >= 0 && evento.quality_index >= 0) {
-    const auto& formas = obtenerFormasConocidas();
-    
-    // Crear un set con los pitch classes que el MIDI realmente tiene
-    std::set<int> pitchClassesMIDI;
-    for (const Nota& n : evento.notas) {
-        if (n.pitch >= 0) pitchClassesMIDI.insert(pitchClass(n.pitch));
-    }
-
-    for (const auto& forma : formas) {
-        if (forma.quality_index != evento.quality_index) continue;
-        
-        int desplazamiento = pitchClass(evento.root_pitch_class - forma.root_pitch_class);
-        
-        for (int octava = -1; octava <= 1; octava++) {
-            int transposicion = desplazamiento + 12 * octava;
-            CandidatoVoicing cand;
-            bool valida = true;
-            
-            for (int c = 0; c < 6; c++) {
-                if (forma.trastes[c] < 0) continue;
-                int traste = forma.trastes[c] + transposicion;
-                
-                if (traste < 0 || traste > config.traste_maximo) { 
-                    valida = false; 
-                    break; 
-                }
-                
-                PosicionGuitarra p;
-                p.cuerda = c + 1;
-                p.traste = traste;
-                p.pitch = config.afinacion[c] + traste;
-                
-                // NUEVO: Verificar si esta nota existe en el MIDI
-                int pcVoicing = pitchClass(p.pitch);
-                if (pitchClassesMIDI.count(pcVoicing) == 0) {
-                    // La nota no está en el evento original. 
-                    // Si la forma tiene notas extra, descartamos el voicing.
-                    valida = false;
-                    break;
-                }
-                
-                cand.posiciones.push_back(p);
-            }
-            
-            if (valida && !cand.posiciones.empty()) {
-                cand.costo = costoArmonico(cand.posiciones, config, evento.root_pitch_class, evento.quality_index, &pitches);
-                resultado.push_back(cand);
-            }
-        }
-    }
-}
-        // --------------------------------------------------------
+    // --------------------------------------------------------
     // 2. Generar posiciones posibles para cada pitch
     // --------------------------------------------------------
     

@@ -78,7 +78,7 @@ void imprimirTablaturaManual(const Mapper::ResultadoMapeo& resultado) {
     std::cout << lineaAcordes << "\n\n";
 }
 
-    // --- MAIN DEL TEST DE CONSOLA ---
+    // --- MAIN DEL TEST DE CONSOLA  (solo para test) ---
     int main(int argc, char* argv[]) {
         // Usamos rutas absolutas para evitar problemas con el directorio de ejecución (build/)
         std::string archivoMIDI = "C:/Users/SANDRA/Documents/guitarTabCreator/Audio files/Nirvana_Come_As_You_Are_v2.mid";
