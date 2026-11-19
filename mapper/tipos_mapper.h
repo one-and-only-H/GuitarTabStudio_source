@@ -96,4 +96,13 @@ struct ResultadoMelodico {
     Nota notaOriginal;
     CandidatoMelodico candidato;
 };
+
+// Resultado de mapear un evento armónico.
+struct ResultadoArmonico {
+    std::size_t indiceTimeline = 0;
+    EventoArmonico eventoOriginal;
+    CandidatoVoicing candidato;
+};
+
+
 #endif

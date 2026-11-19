@@ -6,6 +6,7 @@
 #include "../tipos.h"
 #include "motor_melodico.h"
 #include "motor_armonico.h"
+#include "merger.h"
 
 #include <iostream>
 #include <vector>
@@ -102,37 +103,63 @@ std::vector<InstanteTimeline> construirTimeline(const SongContext& ctx) {
     return timeline;
 }
 
+
 // ============================================================
-// BLOQUE 3: ORQUESTADOR (SIN ACORDES, SOLO NOTAS)
+// BLOQUE 3: ORQUESTADOR
 // ============================================================
+
 ResultadoMapeo mapear(const std::vector<Nota>& notasRaw) {
-    int notasDescartadas = 0;
-    ResultadoMapeo res;
 
+    // 1. Construir contexto global.
     SongContext ctx = construirContexto(notasRaw);
-    std::vector<InstanteTimeline> timeline = construirTimeline(ctx);
-    
-    auto resultadosMelodicos =
-    MotorMelodico::mapear(timeline, ctx.config);
 
+    // 2. Construir timeline.
+    std::vector<InstanteTimeline> timeline =
+        construirTimeline(ctx);
+
+    // 3. Ejecutar motor melódico.
+    auto resultadosMelodicos =
+        MotorMelodico::mapear(timeline, ctx.config);
+
+    // 4. Ejecutar motor armónico.
     auto resultadosArmonicos =
         MotorArmonico::mapear(timeline, ctx.config);
 
-// DIAGNÓSTICO TEMPORAL
-    std::cout << "\n=== MOTOR ARMONICO ===\n";
+    // 5. Fusionar resultados.
+    ResultadoMapeo resultado = Merger::fusionar(
+        timeline,
+        resultadosMelodicos,
+        resultadosArmonicos,
+        ctx.warnings
+    );
+
+    // ========================================================
+    // DIAGNÓSTICO TEMPORAL
+    // ========================================================
+
+    std::cout << "\n=== MAPPER ===\n";
 
     std::cout << "Eventos en timeline: "
               << timeline.size() << '\n';
 
+    std::cout << "Resultados melodicos: "
+              << resultadosMelodicos.size() << '\n';
+
     std::cout << "Resultados armonicos: "
               << resultadosArmonicos.size() << '\n';
 
+    std::cout << "Eventos finales: "
+              << resultado.eventos.size() << '\n';
+
+    std::cout << "Notas finales: "
+              << resultado.notas.size() << '\n';
+
     for (const auto& r : resultadosArmonicos) {
-        std::cout << "Evento en t="
+        std::cout << "Evento armonico en t="
                   << r.eventoOriginal.timestamp
                   << " | Notas: "
-                << r.eventoOriginal.notas.size()
-                << " | Voicing: ";
+                  << r.eventoOriginal.notas.size()
+                  << " | Voicing: ";
 
         for (const auto& p : r.candidato.posiciones) {
             std::cout << "[C" << p.cuerda
@@ -140,48 +167,11 @@ ResultadoMapeo mapear(const std::vector<Nota>& notasRaw) {
                       << ", P" << p.pitch << "] ";
         }
 
-    std::cout << '\n';
-}
-
-std::map<int, ResultadoMelodico> melElegida;
-
-for (const auto& resultado : resultadosMelodicos) {
-    melElegida[static_cast<int>(resultado.indiceTimeline)] = resultado;
-} //f1
-
-    // 4. Post-proceso (construir tablatura)
-    for (size_t i = 0; i < timeline.size(); ++i) {
-        const auto& inst = timeline[i];
-        
-        TabEvent ev;
-        ev.timestamp = inst.inicio;
-        ev.duracion = inst.fin - inst.inicio;
-        ev.acorde = inst.acorde;
-
-            if (melElegida.count(static_cast<int>(i))) {
-        const auto& resultado =
-            melElegida.at(static_cast<int>(i));
-
-        const auto& cand = resultado.candidato;
-        const auto& top = resultado.notaOriginal;
-
-        TabNote tn;
-        tn.pitch = cand.posicion.pitch;
-        tn.timestamp = inst.inicio;
-        tn.duracion = top.duracion;
-        tn.cuerda = cand.posicion.cuerda;
-        tn.traste = cand.posicion.traste;
-        tn.role = Role::MELODIA;
-
-        ev.notas.push_back(tn);
-        res.notas.push_back(tn);
-        res.eventos.push_back(ev);
+        std::cout << '\n';
     }
 
-} // Cierra el for
+    return resultado;
+}
 
-return res;
-
-} // Cierra mapear()
 
 } // namespace Mapper
