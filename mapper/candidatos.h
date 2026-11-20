@@ -6,6 +6,7 @@
 #define CANDIDATOS_H
 
 #include "tipos_mapper.h"
+#include "formas_conocidas.h"
 #include "../acordes.h"
 
 #include <algorithm>
@@ -26,14 +27,6 @@
 //  0 = cuerda al aire
 // >0 = traste pisado
 
-struct FormaConocida {
-    std::string nombre;
-
-    int root_pitch_class = -1;
-    int quality_index = -1;
-
-    std::vector<int> trastes;
-};
 
 
 // ============================================================
@@ -42,104 +35,6 @@ struct FormaConocida {
 
 // Contiene formas originales.
 // Las transposiciones se generan durante la evaluación.
-
-inline const std::vector<FormaConocida>& obtenerFormasConocidas() {
-
-    static const std::vector<FormaConocida> formas = {
-
-        // ----------------------------------------------------
-        // MAYORES
-        // ----------------------------------------------------
-
-        {"C", 0, CalidadAcorde::MAYOR,
-            {0, 1, 0, 2, 3, -1}},  
-
-        {"A", 9, CalidadAcorde::MAYOR,
-            {0, 2, 2, 2, 0, -1}},
-
-        {"G", 7, CalidadAcorde::MAYOR,
-            {3, 0, 0, 0, 2, 3}},
-
-        {"E", 4, CalidadAcorde::MAYOR,
-            {0, 0, 1, 2, 2, 0}},
-
-        {"D", 2, CalidadAcorde::MAYOR,
-            {2, 3, 2, 0, -1, -1}},
-
-        // Formas móviles alternativas
-
-        {"C_barra", 0, CalidadAcorde::MAYOR,
-            {3, 5, 5, 5, 3, -1}},
-
-        {"A_barra", 9, CalidadAcorde::MAYOR,
-            {5, 5, 6, 7, 7, 5}},
-
-        {"G_barra", 7, CalidadAcorde::MAYOR,
-            {3, 3, 4, 5, 5, 3}},
-
-        // ----------------------------------------------------
-        // MENORES
-        // ----------------------------------------------------
-
-        {"Am", 9, CalidadAcorde::MENOR,
-            {0, 1, 2, 2, 0, -1}},
-
-        {"Em", 4, CalidadAcorde::MENOR,
-            {0, 0, 0, 2, 2, 0}},
-
-        {"Dm", 2, CalidadAcorde::MENOR,
-            {1, 3, 2, 0, -1, -1}},
-
-        // Formas móviles alternativas
-
-        {"Am_barra", 9, CalidadAcorde::MENOR,
-            {5, 5, 5, 7, 7, 5}},
-
-        {"Bm", 11, CalidadAcorde::MENOR,
-            {7, 7, 7, 9, 9, 7}},
-
-        // ----------------------------------------------------
-        // SÉPTIMAS
-        // ----------------------------------------------------
-
-        {"A7", 9, CalidadAcorde::SEPTIMA,
-            {0, 2, 0, 2, 0, -1}},
-
-        {"D7", 2, CalidadAcorde::SEPTIMA,
-            {2, 1, 2, 0, -1, -1}},
-
-        {"E7", 4, CalidadAcorde::SEPTIMA,
-            {0, 0, 1, 0, 2, 0}},
-
-        {"G7", 7, CalidadAcorde::SEPTIMA,
-            {1, 0, 0, 0, 2, 3}},
-
-        {"C7", 0, CalidadAcorde::SEPTIMA,
-            {0, 1, 3, 2, 3, -1}},
-
-        {"B7", 11, CalidadAcorde::SEPTIMA,
-            {2, 0, 2, 1, 2, -1}},
-
-        // ----------------------------------------------------
-        // F MAYOR
-        // ----------------------------------------------------
-
-        {"F", 5, CalidadAcorde::MAYOR,
-            {1, 1, 2, 3, 3, 1}},
-
-        {"F_simplificado", 5, CalidadAcorde::MAYOR,
-            {1, 1, 2, 3, -1, -1}},
-
-        // ----------------------------------------------------
-        // POWER CHORD
-        // ----------------------------------------------------
-
-        {"E5", 4, CalidadAcorde::POWER_CHORD,
-            {-1, -1, -1, 2, 2, 0}}
-    };
-    
-    return formas;
-}
 
 
 
