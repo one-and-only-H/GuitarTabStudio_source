@@ -1,6 +1,4 @@
-// afinacion[cuerda - 1] devuelve el pitch MIDI de la cuerda al aire.
-// cuerda 1 (aguda) → afinacion[0] = 64 (E4)
-// cuerda 6 (grave) → afinacion[5] = 40 (E2)
+
 
 #ifndef CANDIDATOS_H
 #define CANDIDATOS_H
@@ -16,7 +14,9 @@
 #include <string>
 #include <set>
 #include <vector>
-
+// afinacion[cuerda - 1] devuelve el pitch MIDI de la cuerda al aire.
+// cuerda 1 (aguda) → afinacion[0] = 64 (E4)
+// cuerda 6 (grave) → afinacion[5] = 40 (E2)
 // ============================================================
 // FORMAS CONOCIDAS
 // ============================================================
@@ -317,6 +317,7 @@ inline double costoArmonico(
         config.w_t_armonico * C_t +
         config.w_e_armonico * C_e +
         config.w_d_armonico * C_d +
+        config.w_f_armonico * C_f +
         config.w_s_armonico * C_s;
 }
 

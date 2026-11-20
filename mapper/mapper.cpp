@@ -85,9 +85,9 @@ std::vector<InstanteTimeline> construirTimeline(const SongContext& ctx) {
             inst.fin = inst.inicio + maxDur; // Si maxDur es 0, será inst.inicio
         }
 
-        // Buscar acorde activo (opcional, para mostrar el nombre)
+        // Buscar acorde que comienza en este instante
         for (const auto& a : ctx.acordes) {
-            if (a.timestamp <= inst.inicio && (a.timestamp + a.duracion) > inst.inicio) {
+            if (a.notas.size() >= 2 && std::abs(a.timestamp - inst.inicio) < 1e-4) {
                 inst.acorde = a;
                 break;
             }
@@ -117,10 +117,28 @@ ResultadoMapeo mapear(const std::vector<Nota>& notasRaw) {
     // 2. Construir timeline.
     std::vector<InstanteTimeline> timeline =
         construirTimeline(ctx);
-
+    std::size_t cntMelodia = 0, cntAcorde = 0, cntBajo = 0;
+    for (const auto& inst : timeline) {
+        for (const auto& n : inst.notasAtacadas) {
+            if (n.role == Role::MELODIA) ++cntMelodia;
+            else if (n.role == Role::ACORDE) ++cntAcorde;
+            else if (n.role == Role::BAJO) ++cntBajo;
+        }
+    }
+    std::cout << "[DEBUG ROLES] MELODIA: " << cntMelodia
+              << " | ACORDE: " << cntAcorde
+              << " | BAJO: " << cntBajo << '\n';
     // 3. Ejecutar motor melódico.
-    auto resultadosMelodicos =
-        MotorMelodico::mapear(timeline, ctx.config);
+    auto patronesArpegio = AnalizadorPatrones::detectar(
+        timeline,
+        ctx.config
+    );
+
+    auto resultadosMelodicos = MotorMelodico::mapear(
+                                                    timeline,
+                                                    ctx.config,
+                                                    patronesArpegio
+                                                    );
 
     // 4. Ejecutar motor armónico.
     auto resultadosArmonicos =

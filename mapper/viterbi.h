@@ -3,6 +3,7 @@
 #define VITERBI_H
 
 #include "tipos_mapper.h"
+#include "analizador_patrones.h"
 
 #include <vector>
 #include <algorithm>
@@ -371,28 +372,114 @@ inline std::vector<int> resolverViterbiMelodico(
     const std::vector<std::vector<CandidatoMelodico>>& candidatos,
     const ConfigMapper& config
 ) {
-    auto obtenerCosto =
-        [](const CandidatoMelodico& candidato) {
-            return candidato.costo;
-        };
+    std::vector<int> camino;
 
-    auto obtenerTransicion =
-        [&config](
-            const CandidatoMelodico& anterior,
-            const CandidatoMelodico& actual
-        ) {
-            return detalleViterbi::costoTransicionMelodica(
-                anterior,
-                actual,
-                config
-            );
-        };
+    if (candidatos.empty()) {
+        return camino;
+    }
 
-    return detalleViterbi::ejecutarViterbi(
-        candidatos,
-        obtenerCosto,
-        obtenerTransicion
-    );
+    for (const auto& instante : candidatos) {
+        if (instante.empty()) {
+            return camino;
+        }
+    }
+
+    struct NodoMelodico {
+        double costo_acumulado = std::numeric_limits<double>::infinity();
+        int indice_anterior = -1;
+        int ancla_traste = 0; // Último traste > 0 pisado por la mano
+    };
+
+    const int maxTraste = std::max(1, config.traste_maximo);
+    const std::size_t N = candidatos.size();
+
+    std::vector<std::vector<NodoMelodico>> tabla(N);
+
+    // 1. Inicialización
+    tabla[0].resize(candidatos[0].size());
+    for (std::size_t j = 0; j < candidatos[0].size(); ++j) {
+        tabla[0][j].costo_acumulado = candidatos[0][j].costo;
+        tabla[0][j].indice_anterior = -1;
+        tabla[0][j].ancla_traste = candidatos[0][j].posicion.traste;
+    }
+
+    // 2. Recurrencia con memoria de posición de mano (ancla_traste)
+    for (std::size_t i = 1; i < N; ++i) {
+        tabla[i].resize(candidatos[i].size());
+
+        for (std::size_t j = 0; j < candidatos[i].size(); ++j) {
+            const auto& actual = candidatos[i][j];
+
+            for (std::size_t k = 0; k < candidatos[i - 1].size(); ++k) {
+                const auto& prev = candidatos[i - 1][k];
+                const int anclaPrev = tabla[i - 1][k].ancla_traste;
+
+                double cambioCuerda =
+                    static_cast<double>(
+                        std::abs(prev.posicion.cuerda - actual.posicion.cuerda)
+                    ) / 5.0;
+
+                double movimientoTraste = 0.0;
+                if (actual.posicion.traste > 0 && anclaPrev > 0) {
+                    int deltaTraste = std::abs(anclaPrev - actual.posicion.traste);
+                    movimientoTraste =
+                        static_cast<double>(deltaTraste) / maxTraste;
+
+                    // Penalización extra si el salto excede el alcance cómodo de la mano
+                    if (deltaTraste > config.max_hand_span) {
+                        movimientoTraste +=
+                            static_cast<double>(deltaTraste - config.max_hand_span) /
+                            std::max(1, config.max_hand_span);
+                    }
+                } else if (actual.posicion.traste == 0 && anclaPrev >= 7 &&
+                           actual.posicion.cuerda == prev.posicion.cuerda) {
+                    // Evita soltar al aire en la misma cuerda cuando la mano está arriba en el mástil
+                    movimientoTraste =
+                        static_cast<double>(anclaPrev) / maxTraste;
+                }
+
+                double costoTransicion =
+                    config.w_transicion_traste * movimientoTraste +
+                    config.w_transicion_cuerda * cambioCuerda;
+
+                double costoTotal =
+                    tabla[i - 1][k].costo_acumulado +
+                    costoTransicion +
+                    actual.costo;
+
+                if (costoTotal < tabla[i][j].costo_acumulado) {
+                    tabla[i][j].costo_acumulado = costoTotal;
+                    tabla[i][j].indice_anterior = static_cast<int>(k);
+                    tabla[i][j].ancla_traste =
+                        (actual.posicion.traste > 0)
+                            ? actual.posicion.traste
+                            : anclaPrev;
+                }
+            }
+        }
+    }
+
+    // 3. Mejor estado final
+    int mejorFinal = 0;
+    double menorCosto = tabla.back()[0].costo_acumulado;
+
+    for (std::size_t j = 1; j < tabla.back().size(); ++j) {
+        if (tabla.back()[j].costo_acumulado < menorCosto) {
+            menorCosto = tabla.back()[j].costo_acumulado;
+            mejorFinal = static_cast<int>(j);
+        }
+    }
+
+    // 4. Reconstrucción del camino
+    camino.resize(N);
+    int indiceActual = mejorFinal;
+
+    for (int i = static_cast<int>(N) - 1; i >= 0; --i) {
+        camino[i] = indiceActual;
+        indiceActual = tabla[i][indiceActual].indice_anterior;
+    }
+
+    return camino;
 }
 
 

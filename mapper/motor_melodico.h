@@ -5,19 +5,97 @@
 #include "mapper.h"
 #include "candidatos.h"
 #include "viterbi.h"
+#include "analizador_patrones.h"
 
 #include <vector>
 #include <algorithm>
 #include <cstddef>
+#include <limits>
+#include <cmath>
 
 namespace MotorMelodico {
 
+inline double calcularCostoArpegio(
+    std::size_t indiceTimeline,
+    const Nota& nota,
+    const CandidatoMelodico& candidato,
+    const std::vector<AnalizadorPatrones::PatronDetectado>& patrones,
+    const ConfigMapper& config
+) {
+    double mejorPenalizacion =
+        std::numeric_limits<double>::infinity();
+
+    for (const auto& patron : patrones) {
+
+        if (patron.confianza <= 0.0)
+            continue;
+
+        for (std::size_t i = 0;
+             i < patron.indicesTimeline.size() &&
+             i < patron.pitches.size();
+             ++i) {
+
+            if (patron.indicesTimeline[i] != indiceTimeline ||
+                patron.pitches[i] != nota.pitch) {
+                continue;
+            }
+
+            double mejorDistancia = 1.0;
+
+            for (const auto& posicionForma : patron.posicionesForma) {
+
+                if (posicionForma.pitch != nota.pitch)
+                    continue;
+
+                double distanciaTraste =
+                    std::abs(
+                        candidato.posicion.traste -
+                        posicionForma.traste
+                    ) / static_cast<double>(
+                        std::max(1, config.traste_maximo)
+                    );
+
+                double distanciaCuerda =
+                    std::abs(
+                        candidato.posicion.cuerda -
+                        posicionForma.cuerda
+                    ) / 5.0;
+
+                double distancia =
+                    0.5 * distanciaTraste +
+                    0.5 * distanciaCuerda;
+
+                mejorDistancia = std::min(
+                    mejorDistancia,
+                    distancia
+                );
+            }
+
+            double penalizacion =
+                mejorDistancia *
+                std::clamp(patron.confianza, 0.0, 1.0);
+
+            mejorPenalizacion = std::min(
+                mejorPenalizacion,
+                penalizacion
+            );
+        }
+    }
+
+    if (!std::isfinite(mejorPenalizacion))
+        return 0.0;
+
+    return config.w_patron_arpegio * mejorPenalizacion;
+}
 // Resuelve la posición de las notas melódicas del timeline.
 // Si coinciden varias notas melódicas en un instante,
 // conserva la más aguda, manteniendo el comportamiento monofónico.
+
+
 inline std::vector<ResultadoMelodico> mapear(
     const std::vector<Mapper::InstanteTimeline>& timeline,
-    const ConfigMapper& config
+    const ConfigMapper& config,
+    const std::vector<AnalizadorPatrones::PatronDetectado>& patrones
 ) {
     std::vector<ResultadoMelodico> resultados;
 
@@ -29,21 +107,20 @@ inline std::vector<ResultadoMelodico> mapear(
 
     // Conserva la nota original correspondiente a cada capa.
     std::vector<Nota> notasOriginales;
-
-    // --------------------------------------------------------
-    // 1. Generación de candidatos
-    // --------------------------------------------------------
+// --------------------------------------------------------
+// 1. Generación de candidatos
+// --------------------------------------------------------
 
     for (std::size_t i = 0; i < timeline.size(); ++i) {
         const auto& inst = timeline[i];
 
-        const auto& notasMelodicas = inst.notasAtacadas;
+        auto notasMelodicas =
+            Mapper::obtenerNotasMelodicasAtacadas(inst);
 
         if (notasMelodicas.empty())
             continue;
 
         // El motor sigue siendo monofónico:
-        // selecciona la nota melódica más aguda.
         auto top = *std::max_element(
             notasMelodicas.begin(),
             notasMelodicas.end(),
@@ -57,6 +134,29 @@ inline std::vector<ResultadoMelodico> mapear(
         if (candidatos.empty())
             continue;
 
+    // ----------------------------------------------------
+    // Ajuste de costos según patrones de arpegio
+    // ----------------------------------------------------
+
+        for (auto& candidato : candidatos) {
+            candidato.costo += calcularCostoArpegio(
+                i,
+                top,
+                candidato,
+                patrones,
+                config
+            );
+        }
+
+        std::sort(
+            candidatos.begin(),
+            candidatos.end(),
+                [](const CandidatoMelodico& a,
+                const CandidatoMelodico& b) {
+                return a.costo < b.costo;
+            }
+        );
+
         capas.push_back(std::move(candidatos));
         indicesTimeline.push_back(i);
         notasOriginales.push_back(top);
@@ -65,11 +165,11 @@ inline std::vector<ResultadoMelodico> mapear(
     if (capas.empty())
         return resultados;
 
-    // --------------------------------------------------------
-    // 2. Resolución temporal mediante Viterbi
-    // --------------------------------------------------------
+// --------------------------------------------------------
+// 2. Resolución temporal mediante Viterbi
+// --------------------------------------------------------
 
-    auto camino = resolverViterbiMelodico(capas, config);
+auto camino = resolverViterbiMelodico(capas, config);
 
     // --------------------------------------------------------
     // 3. Construcción de resultados

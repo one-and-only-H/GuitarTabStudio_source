@@ -82,7 +82,12 @@ struct ResultadoMapeo {
 // Las que pertenecen al acorde son ACORDE.
 // Las que no pertenecen son MELODIA.
 inline void asignarRoles(InstanteTimeline& inst) {
-    if (!inst.acorde.has_value()) {
+    bool esAcordeValido =
+        inst.acorde.has_value() &&
+        inst.acorde->notas.size() >= 2 &&
+        inst.acorde->root_pitch_class >= 0;
+
+    if (!esAcordeValido) {
         for (auto& n : inst.notasAtacadas) n.role = Role::MELODIA;
         for (auto& n : inst.notasSostenidas) n.role = Role::MELODIA;
         return;
