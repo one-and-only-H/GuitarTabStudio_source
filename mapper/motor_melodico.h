@@ -169,7 +169,7 @@ inline std::vector<ResultadoMelodico> mapear(
 // 2. Resolución temporal mediante Viterbi
 // --------------------------------------------------------
 
-auto camino = resolverViterbiMelodico(capas, config);
+auto camino = resolverViterbiMelodico(capas, notasOriginales, config);
 
     // --------------------------------------------------------
     // 3. Construcción de resultados

@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cmath>
+#include <array>
 #include <limits>
 
 // ============================================================
@@ -370,6 +371,7 @@ namespace detalleViterbi {
 
 inline std::vector<int> resolverViterbiMelodico(
     const std::vector<std::vector<CandidatoMelodico>>& candidatos,
+    const std::vector<Nota>& notasOriginales,
     const ConfigMapper& config
 ) {
     std::vector<int> camino;
@@ -388,27 +390,47 @@ inline std::vector<int> resolverViterbiMelodico(
         double costo_acumulado = std::numeric_limits<double>::infinity();
         int indice_anterior = -1;
         int ancla_traste = 0; // Último traste > 0 pisado por la mano
+        std::array<double, 6> cuerda_libre_en{}; // Timestamp en que queda libre cada cuerda (0..5)
     };
 
     const int maxTraste = std::max(1, config.traste_maximo);
     const std::size_t N = candidatos.size();
+    constexpr double HOLGURA_LEGATO = 0.025;      // 25 ms de margen para hammer-ons / pull-offs
+    constexpr double PENALIZACION_CUERDA_OCUPADA = 0.45;
 
     std::vector<std::vector<NodoMelodico>> tabla(N);
 
     // 1. Inicialización
     tabla[0].resize(candidatos[0].size());
+    const double finNota0 = (0 < notasOriginales.size())
+        ? (notasOriginales[0].timestamp + notasOriginales[0].duracion)
+        : 0.0;
+
     for (std::size_t j = 0; j < candidatos[0].size(); ++j) {
         tabla[0][j].costo_acumulado = candidatos[0][j].costo;
         tabla[0][j].indice_anterior = -1;
         tabla[0][j].ancla_traste = candidatos[0][j].posicion.traste;
+
+        int idxCuerda = candidatos[0][j].posicion.cuerda - 1;
+        if (idxCuerda >= 0 && idxCuerda < 6) {
+            tabla[0][j].cuerda_libre_en[idxCuerda] = finNota0;
+        }
     }
 
-    // 2. Recurrencia con memoria de posición de mano (ancla_traste)
+    // 2. Recurrencia con memoria de mano y estado de ocupación de cuerdas
     for (std::size_t i = 1; i < N; ++i) {
         tabla[i].resize(candidatos[i].size());
 
+        const double inicioActual = (i < notasOriginales.size())
+            ? notasOriginales[i].timestamp
+            : 0.0;
+        const double finActual = (i < notasOriginales.size())
+            ? (notasOriginales[i].timestamp + notasOriginales[i].duracion)
+            : 0.0;
+
         for (std::size_t j = 0; j < candidatos[i].size(); ++j) {
             const auto& actual = candidatos[i][j];
+            const int idxCuerdaActual = actual.posicion.cuerda - 1;
 
             for (std::size_t k = 0; k < candidatos[i - 1].size(); ++k) {
                 const auto& prev = candidatos[i - 1][k];
@@ -425,22 +447,30 @@ inline std::vector<int> resolverViterbiMelodico(
                     movimientoTraste =
                         static_cast<double>(deltaTraste) / maxTraste;
 
-                    // Penalización extra si el salto excede el alcance cómodo de la mano
                     if (deltaTraste > config.max_hand_span) {
                         movimientoTraste +=
                             static_cast<double>(deltaTraste - config.max_hand_span) /
                             std::max(1, config.max_hand_span);
                     }
-                } else if (actual.posicion.traste == 0 && anclaPrev >= 7 &&
-                           actual.posicion.cuerda == prev.posicion.cuerda) {
-                    // Evita soltar al aire en la misma cuerda cuando la mano está arriba en el mástil
+                } else if (actual.posicion.traste == 0 && anclaPrev >= 5) {
                     movimientoTraste =
                         static_cast<double>(anclaPrev) / maxTraste;
                 }
 
+                // Penalización si la cuerda elegida aún tiene una nota sonando
+                // más allá de la holgura de legato (25 ms)
+                double penalizacionSustain = 0.0;
+                if (idxCuerdaActual >= 0 && idxCuerdaActual < 6) {
+                    double libreEn = tabla[i - 1][k].cuerda_libre_en[idxCuerdaActual];
+                    if (inicioActual < (libreEn - HOLGURA_LEGATO)) {
+                        penalizacionSustain = PENALIZACION_CUERDA_OCUPADA;
+                    }
+                }
+
                 double costoTransicion =
                     config.w_transicion_traste * movimientoTraste +
-                    config.w_transicion_cuerda * cambioCuerda;
+                    config.w_transicion_cuerda * cambioCuerda +
+                    penalizacionSustain;
 
                 double costoTotal =
                     tabla[i - 1][k].costo_acumulado +
@@ -454,6 +484,12 @@ inline std::vector<int> resolverViterbiMelodico(
                         (actual.posicion.traste > 0)
                             ? actual.posicion.traste
                             : anclaPrev;
+
+                    tabla[i][j].cuerda_libre_en = tabla[i - 1][k].cuerda_libre_en;
+                    if (idxCuerdaActual >= 0 && idxCuerdaActual < 6) {
+                        tabla[i][j].cuerda_libre_en[idxCuerdaActual] =
+                            std::max(tabla[i][j].cuerda_libre_en[idxCuerdaActual], finActual);
+                    }
                 }
             }
         }
