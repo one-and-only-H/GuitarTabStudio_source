@@ -6,6 +6,7 @@
 // ─────────────────────────────────────────────────────────────
 
 #include <iostream>
+#include <limits>
 
 #if MODO_TEST_CONSOLA
 
@@ -81,7 +82,7 @@ void imprimirTablaturaManual(const Mapper::ResultadoMapeo& resultado) {
     // --- MAIN DEL TEST DE CONSOLA  (solo para test) ---
     int main(int argc, char* argv[]) {
         // Usamos rutas absolutas para evitar problemas con el directorio de ejecución (build/)
-        std::string archivoMIDI = "C:/Users/SANDRA/Documents/guitarTabCreator/Audio files/test_Master_Of_Puppets.mid";
+        std::string archivoMIDI = "C:/Users/SANDRA/Documents/guitarTabCreator/Audio files/test_En_La_Ciudad_De_La_Furia.mid";
         std::string carpetaSongs = "C:/Users/SANDRA/Documents/guitarTabCreator/GuitarTabCreator/songs";
         std::string scriptPython = "C:/Users/SANDRA/Documents/guitarTabCreator/GuitarTabCreator/scripts/midi2csv.py";
 
@@ -129,8 +130,6 @@ void imprimirTablaturaManual(const Mapper::ResultadoMapeo& resultado) {
             }
         }
 
-        // ... (el resto del código sigue igual)
-
     // 4. Procesar cada CSV generado
     for (const std::string& rutaCSV : archivosCSV) {
         std::cout << "\n============================================\n";
@@ -146,6 +145,21 @@ void imprimirTablaturaManual(const Mapper::ResultadoMapeo& resultado) {
             }
             std::cout << "Notas cargadas: " << notas.size() << "\n";
 
+            // Construir contexto para diagnóstico
+            Mapper::SongContext contexto = Mapper::construirContexto(notas);
+
+            std::cout << "\n=== CONTEXTO TEMPORAL ===\n";
+
+            for (const auto& perfil : contexto.contexto.perfiles) {
+                std::cout
+                    << "Bloque "
+                    << std::fixed << std::setprecision(2)
+                    << perfil.inicio << " - " << perfil.fin
+                    << " s | Mediana MIDI: "
+                    << perfil.registroMediano
+                    << '\n';
+            }
+            // Ejecutar mapper normalmente
             Mapper::ResultadoMapeo resultado = Mapper::mapear(notas);
 
             std::cout << "Eventos generados: " << resultado.eventos.size() << "\n";
@@ -163,6 +177,11 @@ void imprimirTablaturaManual(const Mapper::ResultadoMapeo& resultado) {
             std::cerr << "[EXCEPCIÓN] " << e.what() << "\n";
         }
     }
+    std::cout << "\nIngresa cualquier tecla y presiona Enter para cerrar...";
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    std::cin.get();
+
+    return 0;
 
     return 0;
 }

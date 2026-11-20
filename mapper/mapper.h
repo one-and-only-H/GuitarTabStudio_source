@@ -3,6 +3,7 @@
 
 #include "tipos_mapper.h"
 #include "../acordes.h"
+#include "tipos_contexto.h"
 
 
 #include <vector>
@@ -25,6 +26,7 @@ struct SongContext {
     Tonalidad tonalidad;
     
     std::vector<Warning> warnings;
+    ContextoTemporal contexto;
 };
 
 // Segmento de tiempo donde el estado (notas/acordes) no cambia.

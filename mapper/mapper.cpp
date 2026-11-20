@@ -1,6 +1,7 @@
 #include "mapper.h"
 #include "candidatos.h"
 #include "viterbi.h"
+#include "tipos_contexto.h"
 #include "tipos_mapper.h"
 #include "../acordes.h"
 #include "../tipos.h"
