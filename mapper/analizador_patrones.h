@@ -159,9 +159,7 @@ inline std::vector<PlantillaArpegio> generarPlantillas(
         int deltaMaximo =
             config.traste_maximo - trasteMaximo;
 
-        for (int delta = deltaMinimo;
-             delta <= deltaMaximo;
-             ++delta) {
+        for (int delta = deltaMinimo; delta <= deltaMaximo; ++delta) {
 
             PlantillaArpegio plantilla;
 
@@ -175,7 +173,7 @@ inline std::vector<PlantillaArpegio> generarPlantillas(
                 int traste = forma.trastes[cuerda];
 
                 if (traste < 0)
-                 continue;
+                    continue;
 
                 traste += delta;
 
@@ -193,6 +191,30 @@ inline std::vector<PlantillaArpegio> generarPlantillas(
 
             if (plantilla.pitches.size() < 3)
                 continue;
+
+            // Validar ergonomía de cejilla implícita si la forma se desplazó hacia arriba
+            if (delta > 0) {
+                int minPisado = config.traste_maximo + 1;
+                int maxPisado = 0;
+                for (const auto& pos : plantilla.posiciones) {
+                    if (pos.traste > 0) {
+                        minPisado = std::min(minPisado, pos.traste);
+                        maxPisado = std::max(maxPisado, pos.traste);
+                    }
+                }
+                if (minPisado <= maxPisado) {
+                    if ((maxPisado - minPisado) > config.max_hand_span)
+                        continue;
+
+                    int notasSobreCejilla = 0;
+                    for (const auto& pos : plantilla.posiciones) {
+                        if (pos.traste > minPisado)
+                            ++notasSobreCejilla;
+                    }
+                    if (notasSobreCejilla > 3)
+                        continue;
+                }
+            }
 
             plantillas.push_back(
                 std::move(plantilla)
@@ -552,8 +574,22 @@ inline std::vector<PatronDetectado> detectar(
             return a.pitches.size() > b.pitches.size();
         }
     );
+    
+    std::vector<PatronDetectado> unicos;
+    for (auto& p : resultados) {
+        bool duplicado = false;
+        for (const auto& u : unicos) {
+            if (sonEquivalentes(p, u)) {
+                duplicado = true;
+                break;
+            }
+        }
+        if (!duplicado) {
+            unicos.push_back(std::move(p));
+        }
+    }
 
-    return resultados;
+    return unicos;
 }
 
 } // namespace AnalizadorPatrones

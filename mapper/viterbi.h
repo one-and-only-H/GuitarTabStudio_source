@@ -25,38 +25,91 @@ namespace detalleViterbi {
     inline double costoTransicionMelodica(
         const CandidatoMelodico& anterior,
         const CandidatoMelodico& actual,
-        const ConfigMapper& config
+        const ConfigMapper& config,
+        int anclaPrev = -1,
+        double inicioActual = 0.0,
+        double cuerdaLibreEn = 0.0
     ) {
-        // Si alguna de las dos notas es al aire, el costo de movimiento es 0.
-        if (anterior.posicion.traste == 0 || actual.posicion.traste == 0) {
-        // Solo cobramos el cambio de cuerda, si lo hubo (porque cruzar de cuerda
-        // sí requiere mover la mano, aunque sea mínimamente).
-            double cambioCuerda = std::abs(anterior.posicion.cuerda - actual.posicion.cuerda) / 5.0;
-            return config.w_transicion_cuerda * cambioCuerda;
+        // Si no se pasa ancla externa (ej. tests unitarios), usar el traste anterior
+        if (anclaPrev < 0) {
+            anclaPrev = anterior.posicion.traste;
         }
-        int maxTraste = std::max(1, config.traste_maximo);
 
-        double movimientoTraste =
-            static_cast<double>(
-                std::abs(
+        const int maxTraste = std::max(1, config.traste_maximo);
+        const int deltaCuerda = std::abs(anterior.posicion.cuerda - actual.posicion.cuerda);
+        double cambioCuerda = static_cast<double>(deltaCuerda) / 5.0;
+
+        // 1. Movimiento de traste con memoria de ancla (anclaPrev)
+        double movimientoTraste = 0.0;
+        if (actual.posicion.traste > 0) {
+            const int refAncla = (anclaPrev > 0) ? anclaPrev : 1;
+            const int deltaTraste = std::abs(refAncla - actual.posicion.traste);
+            movimientoTraste = static_cast<double>(deltaTraste) / maxTraste;
+
+            // Cruzar a cuerda adyacente dentro de la misma caja de dedos es casi gratis
+            if (deltaCuerda == 1 && deltaTraste <= 2) {
+                cambioCuerda *= 0.25;
+            }
+            // Desplazarse >= 2 trastes en la misma cuerda cuesta más que cruzar de cuerda en caja
+            if (deltaCuerda == 0 && deltaTraste >= 2) {
+                movimientoTraste *= 1.6;
+            }
+            // Penalización extra si excede la extensión cómoda de la mano
+            // Penalización progresiva desde saltos >= max_hand_span (4 trastes)
+            if (deltaTraste >= config.max_hand_span) {
+                movimientoTraste +=
+                    static_cast<double>(deltaTraste - config.max_hand_span + 1) /
+                    std::max(1, config.max_hand_span);
+            }
+        } else if (actual.posicion.traste == 0 && anclaPrev >= 6) {
+            // Permite usar cuerdas al aire en primera posición (trastes 1-5),
+            // pero penaliza soltar al aire cuando la mano ya subió a zona media/alta (>= 6).
+            movimientoTraste = static_cast<double>(anclaPrev) / maxTraste;
+            if (anclaPrev >= config.max_hand_span) {
+                movimientoTraste +=
+                    static_cast<double>(anclaPrev - config.max_hand_span + 1) /
+                    std::max(1, config.max_hand_span);
+            }
+        }
+
+        // 2. Penalización solo si hay solapamiento real de sustain en la cuerda elegida
+        constexpr double HOLGURA_SOLAPAMIENTO = 0.015; // 15 ms de tolerancia
+        constexpr double PENALIZACION_CUERDA_OCUPADA = 0.30;
+        double penalizacionSustain = 0.0;
+
+        // 2. Penalización por cuerda ocupada / resonancia
+
+
+
+        if (inicioActual < cuerdaLibreEn &&
+            cuerdaLibreEn > 0.0) {
+
+            const int deltaTrasteMismaCuerda =
+                    std::abs(
                     anterior.posicion.traste -
                     actual.posicion.traste
-                )
-            ) / maxTraste;
+                );
 
-        double cambioCuerda =
-            static_cast<double>(
-                std::abs(
-                    anterior.posicion.cuerda -
-                    actual.posicion.cuerda
-                )
-            ) / 5.0;
+            const bool esPosibleLigado =
+                (deltaCuerda == 0) &&
+                (deltaTrasteMismaCuerda >= 1 &&
+                deltaTrasteMismaCuerda <= 3);
+
+            if (!esPosibleLigado) {
+                penalizacionSustain =
+                PENALIZACION_CUERDA_OCUPADA;
+            }
+}
+
+        // 2. Penalización por resonancia/sustain activo en la cuerda elegida
+   
+        
 
         return
             config.w_transicion_traste * movimientoTraste +
-            config.w_transicion_cuerda * cambioCuerda;
+            config.w_transicion_cuerda * cambioCuerda +
+            penalizacionSustain;
     }
-
 
     // --------------------------------------------------------
     // Calcula el centro de un voicing
@@ -387,132 +440,264 @@ inline std::vector<int> resolverViterbiMelodico(
     }
 
     struct NodoMelodico {
-        double costo_acumulado = std::numeric_limits<double>::infinity();
+        double costo_acumulado =
+            std::numeric_limits<double>::infinity();
+
+        int indice_candidato = -1;
         int indice_anterior = -1;
-        int ancla_traste = 0; // Último traste > 0 pisado por la mano
-        std::array<double, 6> cuerda_libre_en{}; // Timestamp en que queda libre cada cuerda (0..5)
+
+        int ancla_traste = 0;
+
+        std::array<double, 6> cuerda_libre_en{};
     };
 
-    const int maxTraste = std::max(1, config.traste_maximo);
-    const std::size_t N = candidatos.size();
-    constexpr double HOLGURA_LEGATO = 0.025;      // 25 ms de margen para hammer-ons / pull-offs
+    constexpr std::size_t ANCHO_BEAM = 96;
+    constexpr std::size_t MAX_ESTADOS_POR_CANDIDATO = 4;
+
+    constexpr double VENTANA_RESONANCIA = 0.075;
     constexpr double PENALIZACION_CUERDA_OCUPADA = 0.45;
+
+    const std::size_t N = candidatos.size();
 
     std::vector<std::vector<NodoMelodico>> tabla(N);
 
-    // 1. Inicialización
-    tabla[0].resize(candidatos[0].size());
-    const double finNota0 = (0 < notasOriginales.size())
-        ? (notasOriginales[0].timestamp + notasOriginales[0].duracion)
-        : 0.0;
+    // ========================================================
+    // 1. INICIALIZACIÓN
+    // ========================================================
+
+    tabla[0].reserve(candidatos[0].size());
+
+    const double inicioNota0 =
+        (!notasOriginales.empty())
+            ? notasOriginales[0].timestamp
+            : 0.0;
+
+    const double finNota0 =
+        (!notasOriginales.empty())
+            ? notasOriginales[0].timestamp +
+              notasOriginales[0].duracion
+            : 0.0;
 
     for (std::size_t j = 0; j < candidatos[0].size(); ++j) {
-        tabla[0][j].costo_acumulado = candidatos[0][j].costo;
-        tabla[0][j].indice_anterior = -1;
-        tabla[0][j].ancla_traste = candidatos[0][j].posicion.traste;
 
-        int idxCuerda = candidatos[0][j].posicion.cuerda - 1;
+        NodoMelodico nodo;
+
+        nodo.costo_acumulado = candidatos[0][j].costo;
+        nodo.indice_candidato = static_cast<int>(j);
+        nodo.indice_anterior = -1;
+
+        // Una cuerda abierta no establece ancla.
+        nodo.ancla_traste =
+            candidatos[0][j].posicion.traste;
+
+        const int idxCuerda =
+            candidatos[0][j].posicion.cuerda - 1;
+
         if (idxCuerda >= 0 && idxCuerda < 6) {
-            tabla[0][j].cuerda_libre_en[idxCuerda] = finNota0;
+
+            nodo.cuerda_libre_en[idxCuerda] =
+                finNota0 + VENTANA_RESONANCIA;
         }
+
+        tabla[0].push_back(nodo);
     }
 
-    // 2. Recurrencia con memoria de mano y estado de ocupación de cuerdas
+    // ========================================================
+    // 2. RECURRENCIA CON MEMORIA FÍSICA
+    // ========================================================
+
     for (std::size_t i = 1; i < N; ++i) {
-        tabla[i].resize(candidatos[i].size());
 
-        const double inicioActual = (i < notasOriginales.size())
-            ? notasOriginales[i].timestamp
-            : 0.0;
-        const double finActual = (i < notasOriginales.size())
-            ? (notasOriginales[i].timestamp + notasOriginales[i].duracion)
-            : 0.0;
+        const double inicioActual =
+            (i < notasOriginales.size())
+                ? notasOriginales[i].timestamp
+                : 0.0;
 
-        for (std::size_t j = 0; j < candidatos[i].size(); ++j) {
-            const auto& actual = candidatos[i][j];
-            const int idxCuerdaActual = actual.posicion.cuerda - 1;
+        const double finActual =
+            (i < notasOriginales.size())
+                ? notasOriginales[i].timestamp +
+                  notasOriginales[i].duracion
+                : inicioActual;
 
-            for (std::size_t k = 0; k < candidatos[i - 1].size(); ++k) {
-                const auto& prev = candidatos[i - 1][k];
-                const int anclaPrev = tabla[i - 1][k].ancla_traste;
+        std::vector<NodoMelodico> nuevosEstados;
 
-                double cambioCuerda =
-                    static_cast<double>(
-                        std::abs(prev.posicion.cuerda - actual.posicion.cuerda)
-                    ) / 5.0;
+        nuevosEstados.reserve(
+            tabla[i - 1].size() * candidatos[i].size()
+        );
 
-                double movimientoTraste = 0.0;
-                if (actual.posicion.traste > 0 && anclaPrev > 0) {
-                    int deltaTraste = std::abs(anclaPrev - actual.posicion.traste);
-                    movimientoTraste =
-                        static_cast<double>(deltaTraste) / maxTraste;
+        // Cada estado previo puede evolucionar hacia
+        // cualquier candidato del instante actual.
 
-                    if (deltaTraste > config.max_hand_span) {
-                        movimientoTraste +=
-                            static_cast<double>(deltaTraste - config.max_hand_span) /
-                            std::max(1, config.max_hand_span);
-                    }
-                } else if (actual.posicion.traste == 0 && anclaPrev >= 5) {
-                    movimientoTraste =
-                        static_cast<double>(anclaPrev) / maxTraste;
-                }
+        for (std::size_t k = 0;
+             k < tabla[i - 1].size();
+             ++k) {
 
-                // Penalización si la cuerda elegida aún tiene una nota sonando
-                // más allá de la holgura de legato (25 ms)
-                double penalizacionSustain = 0.0;
-                if (idxCuerdaActual >= 0 && idxCuerdaActual < 6) {
-                    double libreEn = tabla[i - 1][k].cuerda_libre_en[idxCuerdaActual];
-                    if (inicioActual < (libreEn - HOLGURA_LEGATO)) {
-                        penalizacionSustain = PENALIZACION_CUERDA_OCUPADA;
-                    }
-                }
+            const NodoMelodico& previo = tabla[i - 1][k];
 
-                double costoTransicion =
-                    config.w_transicion_traste * movimientoTraste +
-                    config.w_transicion_cuerda * cambioCuerda +
-                    penalizacionSustain;
+            const CandidatoMelodico& notaPrev =
+                candidatos[i - 1][previo.indice_candidato];
 
-                double costoTotal =
-                    tabla[i - 1][k].costo_acumulado +
+            for (std::size_t j = 0;
+                 j < candidatos[i].size();
+                 ++j) {
+
+                const CandidatoMelodico& actual =
+                    candidatos[i][j];
+
+                const int idxCuerdaActual =
+                    actual.posicion.cuerda - 1;
+
+                const double libreEn =
+                    (idxCuerdaActual >= 0 &&
+                     idxCuerdaActual < 6)
+                        ? previo.cuerda_libre_en[idxCuerdaActual]
+                        : 0.0;
+
+                const double costoTransicion =
+                    detalleViterbi::costoTransicionMelodica(
+                        notaPrev,
+                        actual,
+                        config,
+                        previo.ancla_traste,
+                        inicioActual,
+                        libreEn
+                    );
+
+                NodoMelodico nuevo;
+
+                nuevo.costo_acumulado =
+                    previo.costo_acumulado +
                     costoTransicion +
                     actual.costo;
 
-                if (costoTotal < tabla[i][j].costo_acumulado) {
-                    tabla[i][j].costo_acumulado = costoTotal;
-                    tabla[i][j].indice_anterior = static_cast<int>(k);
-                    tabla[i][j].ancla_traste =
-                        (actual.posicion.traste > 0)
-                            ? actual.posicion.traste
-                            : anclaPrev;
+                nuevo.indice_candidato =
+                    static_cast<int>(j);
 
-                    tabla[i][j].cuerda_libre_en = tabla[i - 1][k].cuerda_libre_en;
-                    if (idxCuerdaActual >= 0 && idxCuerdaActual < 6) {
-                        tabla[i][j].cuerda_libre_en[idxCuerdaActual] =
-                            std::max(tabla[i][j].cuerda_libre_en[idxCuerdaActual], finActual);
-                    }
+                nuevo.indice_anterior =
+                    static_cast<int>(k);
+
+                // Las cuerdas abiertas NO desplazan el ancla.
+                nuevo.ancla_traste =
+                    (actual.posicion.traste > 0)
+                        ? actual.posicion.traste
+                        : previo.ancla_traste;
+
+                nuevo.cuerda_libre_en =
+                    previo.cuerda_libre_en;
+
+                if (idxCuerdaActual >= 0 &&
+                    idxCuerdaActual < 6) {
+
+                    nuevo.cuerda_libre_en[idxCuerdaActual] =
+                        std::max(
+                            nuevo.cuerda_libre_en[idxCuerdaActual],
+                            finActual + VENTANA_RESONANCIA
+                        );
                 }
+
+                nuevosEstados.push_back(nuevo);
             }
+        }
+
+        // ====================================================
+        // 3. PRUNING DEL BEAM
+        // ====================================================
+
+        std::sort(
+            nuevosEstados.begin(),
+            nuevosEstados.end(),
+            [](const NodoMelodico& a,
+               const NodoMelodico& b) {
+
+                return a.costo_acumulado <
+                       b.costo_acumulado;
+            }
+        );
+
+        tabla[i].reserve(ANCHO_BEAM);
+
+        std::vector<std::size_t> cantidadPorCandidato(
+            candidatos[i].size(),
+            0
+        );
+
+        for (const NodoMelodico& estado : nuevosEstados) {
+
+            const std::size_t idx =
+                static_cast<std::size_t>(
+                    estado.indice_candidato
+                );
+
+            // Evitar que un único candidato absorba
+            // todo el beam con diferentes historiales.
+
+            if (cantidadPorCandidato[idx] >=
+                MAX_ESTADOS_POR_CANDIDATO) {
+
+                continue;
+            }
+
+            tabla[i].push_back(estado);
+            cantidadPorCandidato[idx]++;
+
+            if (tabla[i].size() >= ANCHO_BEAM) {
+                break;
+            }
+        }
+
+        // Protección: si el pruning dejase el beam vacío,
+        // conservar el mejor estado disponible.
+
+        if (tabla[i].empty() && !nuevosEstados.empty()) {
+            tabla[i].push_back(nuevosEstados.front());
         }
     }
 
-    // 3. Mejor estado final
-    int mejorFinal = 0;
-    double menorCosto = tabla.back()[0].costo_acumulado;
+    // ========================================================
+    // 4. MEJOR ESTADO FINAL
+    // ========================================================
 
-    for (std::size_t j = 1; j < tabla.back().size(); ++j) {
-        if (tabla.back()[j].costo_acumulado < menorCosto) {
-            menorCosto = tabla.back()[j].costo_acumulado;
+    if (tabla.back().empty()) {
+        return camino;
+    }
+
+    int mejorFinal = 0;
+
+    for (std::size_t j = 1;
+         j < tabla.back().size();
+         ++j) {
+
+        if (tabla.back()[j].costo_acumulado <
+            tabla.back()[mejorFinal].costo_acumulado) {
+
             mejorFinal = static_cast<int>(j);
         }
     }
 
-    // 4. Reconstrucción del camino
-    camino.resize(N);
-    int indiceActual = mejorFinal;
+    // ========================================================
+    // 5. RECONSTRUCCIÓN
+    // ========================================================
 
-    for (int i = static_cast<int>(N) - 1; i >= 0; --i) {
-        camino[i] = indiceActual;
-        indiceActual = tabla[i][indiceActual].indice_anterior;
+    camino.resize(N);
+
+    int indiceEstado = mejorFinal;
+
+    for (int i = static_cast<int>(N) - 1;
+         i >= 0;
+         --i) {
+
+        if (indiceEstado < 0 ||
+            indiceEstado >=
+                static_cast<int>(tabla[i].size())) {
+
+            return {};
+        }
+
+        camino[i] =
+            tabla[i][indiceEstado].indice_candidato;
+
+        indiceEstado =
+            tabla[i][indiceEstado].indice_anterior;
     }
 
     return camino;

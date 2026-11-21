@@ -22,70 +22,52 @@ inline double calcularCostoArpegio(
     const std::vector<AnalizadorPatrones::PatronDetectado>& patrones,
     const ConfigMapper& config
 ) {
-    double mejorPenalizacion =
-        std::numeric_limits<double>::infinity();
+    (void)config;
+
+    constexpr double PENALIZACION_BASE_FUERA_FORMA = 1.50;
+    constexpr double BONO_BASE_EN_FORMA = 0.25;
+
+    double mejorAjuste = 0.0;
+    double mayorConfianza = 0.0;
 
     for (const auto& patron : patrones) {
+        if (patron.confianza <= 0.0) continue;
 
-        if (patron.confianza <= 0.0)
-            continue;
-
-        for (std::size_t i = 0;
-             i < patron.indicesTimeline.size() &&
-             i < patron.pitches.size();
-             ++i) {
-
-            if (patron.indicesTimeline[i] != indiceTimeline ||
-                patron.pitches[i] != nota.pitch) {
-                continue;
+        bool perteneceAlPatron = false;
+        for (std::size_t k = 0;
+             k < patron.indicesTimeline.size() && k < patron.pitches.size();
+             ++k) {
+            if (patron.indicesTimeline[k] == indiceTimeline &&
+                patron.pitches[k] == nota.pitch) {
+                perteneceAlPatron = true;
+                break;
             }
+        }
 
-            double mejorDistancia = 1.0;
+        if (!perteneceAlPatron) continue;
 
-            for (const auto& posicionForma : patron.posicionesForma) {
-
-                if (posicionForma.pitch != nota.pitch)
-                    continue;
-
-                double distanciaTraste =
-                    std::abs(
-                        candidato.posicion.traste -
-                        posicionForma.traste
-                    ) / static_cast<double>(
-                        std::max(1, config.traste_maximo)
-                    );
-
-                double distanciaCuerda =
-                    std::abs(
-                        candidato.posicion.cuerda -
-                        posicionForma.cuerda
-                    ) / 5.0;
-
-                double distancia =
-                    0.5 * distanciaTraste +
-                    0.5 * distanciaCuerda;
-
-                mejorDistancia = std::min(
-                    mejorDistancia,
-                    distancia
-                );
+        bool coincidePosicionForma = false;
+        for (const auto& posForma : patron.posicionesForma) {
+            if (posForma.cuerda == candidato.posicion.cuerda &&
+                posForma.traste == candidato.posicion.traste) {
+                coincidePosicionForma = true;
+                break;
             }
+        }
 
-            double penalizacion =
-                mejorDistancia *
-                std::clamp(patron.confianza, 0.0, 1.0);
-
-            mejorPenalizacion = std::min(
-                mejorPenalizacion,
-                penalizacion
-            );
+        if (patron.confianza > mayorConfianza) {
+            mayorConfianza = patron.confianza;
+            if (coincidePosicionForma) {
+                mejorAjuste = -BONO_BASE_EN_FORMA * patron.confianza;
+            } else if (candidato.posicion.traste == 0 && patron.transposicion <= 4) {
+                mejorAjuste = 0.0; // No prohibir cuerdas al aire en primera posición (evita D|5 en vez de G|0)
+            } else {
+                mejorAjuste = PENALIZACION_BASE_FUERA_FORMA * patron.confianza;
+            }
         }
     }
 
-    if (!std::isfinite(mejorPenalizacion))
-        return 0.0;
-
-    return config.w_patron_arpegio * mejorPenalizacion;
+    return mejorAjuste;
 }
 // Resuelve la posición de las notas melódicas del timeline.
 // Si coinciden varias notas melódicas en un instante,
@@ -120,8 +102,8 @@ inline std::vector<ResultadoMelodico> mapear(
         if (notasMelodicas.empty())
             continue;
 
-        // El motor sigue siendo monofónico:
-        auto top = *std::max_element(
+        // Ordenar de grave a agudo para procesar todas las voces del arpegio/pasaje
+        std::sort(
             notasMelodicas.begin(),
             notasMelodicas.end(),
             [](const Nota& a, const Nota& b) {
@@ -129,37 +111,35 @@ inline std::vector<ResultadoMelodico> mapear(
             }
         );
 
-        auto candidatos = generarCandidatosMelodicos(top, config);
+        for (const auto& notaMelodica : notasMelodicas) {
+            auto candidatos = generarCandidatosMelodicos(notaMelodica, config);
 
-        if (candidatos.empty())
-            continue;
+            if (candidatos.empty())
+                continue;
 
-    // ----------------------------------------------------
-    // Ajuste de costos según patrones de arpegio
-    // ----------------------------------------------------
-
-        for (auto& candidato : candidatos) {
-            candidato.costo += calcularCostoArpegio(
-                i,
-                top,
-                candidato,
-                patrones,
-                config
-            );
-        }
-
-        std::sort(
-            candidatos.begin(),
-            candidatos.end(),
-                [](const CandidatoMelodico& a,
-                const CandidatoMelodico& b) {
-                return a.costo < b.costo;
+            for (auto& candidato : candidatos) {
+                candidato.costo += calcularCostoArpegio(
+                    i,
+                    notaMelodica,
+                    candidato,
+                    patrones,
+                    config
+                );
             }
-        );
 
-        capas.push_back(std::move(candidatos));
-        indicesTimeline.push_back(i);
-        notasOriginales.push_back(top);
+            std::sort(
+                candidatos.begin(),
+                candidatos.end(),
+                [](const CandidatoMelodico& a,
+                   const CandidatoMelodico& b) {
+                    return a.costo < b.costo;
+                }
+            );
+
+            capas.push_back(std::move(candidatos));
+            indicesTimeline.push_back(i);
+            notasOriginales.push_back(notaMelodica);
+        }
     }
 
     if (capas.empty())

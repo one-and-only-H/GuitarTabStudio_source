@@ -31,7 +31,7 @@ struct ConfigMapper {
         64, 59, 55, 50, 45, 40
     };
 
-    double w_t_melodico = 0.65;
+    double w_t_melodico = 0.4;
     double w_c_melodico = 0.0;
 
     double w_t_armonico = 0.35;
@@ -42,8 +42,8 @@ struct ConfigMapper {
     double w_patron_arpegio = 0.35; // Influencia de patrones de arpegio en la selección melódica.
 
         // Pesos de transición melódica
-    double w_transicion_traste = 0.70;
-    double w_transicion_cuerda = 0.30;
+    double w_transicion_traste = 0.80;
+    double w_transicion_cuerda = 0.20;
 
     // Pesos de transición armónica
     double w_transicion_voicing = 0.70;
