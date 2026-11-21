@@ -19,6 +19,24 @@ set(PROJECT_SOURCES
         mainwindow.cpp
         mainwindow.h
         mainwindow.ui
+        tipos.h
+        acordes.h
+        acordes.cpp
+        audio_player.h
+        audio_player.cpp
+        csv_parser.h
+        csv_parser.cpp
+        tab_generator.h
+        tab_generator.cpp
+        mapper/mapper.h
+        mapper/mapper.cpp
+        mapper/tipos_mapper.h
+        mapper/viterbi.h
+        mapper/motor_melodico.h
+        mapper/analizador_patrones.h
+        mapper/candidatos.h
+        mapper/formas_conocidas.h
+        mapper/merger.h
         ${TS_FILES}
 )
 
@@ -26,12 +44,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(GuitarTabCreator
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
-        tipos.h
     )
-# Define target properties for Android with Qt 6 as:
-#    set_property(TARGET GuitarTabCreator APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
-#                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
-# For more information, see https://doc.qt.io/qt-6/qt-add-executable.html#target-creation
 
     qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
 else()
@@ -39,8 +52,6 @@ else()
         add_library(GuitarTabCreator SHARED
             ${PROJECT_SOURCES}
         )
-# Define properties for Android with Qt 5 after find_package() calls as:
-#    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
     else()
         add_executable(GuitarTabCreator
             ${PROJECT_SOURCES}
@@ -50,11 +61,13 @@ else()
     qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
 endif()
 
-target_link_libraries(GuitarTabCreator PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+target_include_directories(GuitarTabCreator PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/mapper
+)
 
-# Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
-# If you are developing for iOS or macOS you should consider setting an
-# explicit, fixed bundle identifier manually though.
+target_link_libraries(GuitarTabCreator PRIVATE Qt${QT_VERSION_MAJOR}::Widgets winmm)
+
 if(${QT_VERSION} VERSION_LESS 6.1.0)
   set(BUNDLE_ID_OPTION MACOSX_BUNDLE_GUI_IDENTIFIER com.example.GuitarTabCreator)
 endif()

@@ -6,59 +6,300 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
+    <width>1211</width>
     <height>600</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
+  <property name="tabShape">
+   <enum>QTabWidget::TabShape::Rounded</enum>
+  </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QPlainTextEdit" name="textEdit_Tab">
+   <widget class="QPlainTextEdit" name="TabWindow">
     <property name="geometry">
      <rect>
-      <x>190</x>
-      <y>20</y>
-      <width>561</width>
-      <height>211</height>
+      <x>0</x>
+      <y>0</y>
+      <width>1161</width>
+      <height>141</height>
      </rect>
+    </property>
+    <property name="lineWrapMode">
+     <enum>QPlainTextEdit::LineWrapMode::NoWrap</enum>
+    </property>
+    <property name="readOnly">
+     <bool>true</bool>
     </property>
     <property name="plainText">
-     <string>e|-----------------|
-B|-----------------|
-G|-----------------|
-D|-----------------|
-A|-----------------|
-E|-----------------|</string>
+     <string>Tiempo
+Acorde
+e|
+B|
+G|
+D|
+A|
+E|</string>
     </property>
    </widget>
-   <widget class="QListView" name="listWidget_Acordes">
+   <widget class="QScrollBar" name="Tab_scrollbar">
     <property name="geometry">
      <rect>
       <x>0</x>
-      <y>20</y>
+      <y>140</y>
+      <width>741</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Orientation::Horizontal</enum>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Play_button">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>171</y>
+      <width>31</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>▶️</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Pause_button">
+    <property name="geometry">
+     <rect>
+      <x>50</x>
+      <y>170</y>
+      <width>31</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>⏸</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Abrir_button">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>200</y>
+      <width>80</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>abrir cancion</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Exportar_button">
+    <property name="geometry">
+     <rect>
+      <x>90</x>
+      <y>200</y>
+      <width>80</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>exportar</string>
+    </property>
+   </widget>
+   <widget class="QDial" name="Gain_dial">
+    <property name="geometry">
+     <rect>
+      <x>430</x>
+      <y>160</y>
+      <width>50</width>
+      <height>64</height>
+     </rect>
+    </property>
+    <property name="invertedControls">
+     <bool>false</bool>
+    </property>
+   </widget>
+   <widget class="QDial" name="Rate_dial">
+    <property name="geometry">
+     <rect>
+      <x>1000</x>
+      <y>150</y>
+      <width>71</width>
+      <height>91</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QDial" name="Width_dial">
+    <property name="geometry">
+     <rect>
+      <x>1080</x>
+      <y>150</y>
+      <width>71</width>
+      <height>101</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QSlider" name="Bass_slider">
+    <property name="geometry">
+     <rect>
+      <x>490</x>
+      <y>180</y>
+      <width>20</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Orientation::Vertical</enum>
+    </property>
+   </widget>
+   <widget class="QSlider" name="Mid_slider">
+    <property name="geometry">
+     <rect>
+      <x>520</x>
+      <y>180</y>
+      <width>20</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Orientation::Vertical</enum>
+    </property>
+   </widget>
+   <widget class="QSlider" name="Treble_slider">
+    <property name="geometry">
+     <rect>
+      <x>550</x>
+      <y>180</y>
+      <width>20</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Orientation::Vertical</enum>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Stop_button">
+    <property name="geometry">
+     <rect>
+      <x>90</x>
+      <y>170</y>
+      <width>21</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>⏹</string>
+    </property>
+   </widget>
+   <widget class="QGroupBox" name="SelectorPastillas">
+    <property name="geometry">
+     <rect>
+      <x>250</x>
+      <y>170</y>
+      <width>120</width>
+      <height>80</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string>Selector de pastillas</string>
+    </property>
+    <widget class="QRadioButton" name="Single_Coil_select">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>30</y>
+       <width>90</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Single Coil</string>
+     </property>
+    </widget>
+    <widget class="QRadioButton" name="Humbucker_select">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>60</y>
+       <width>90</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Humbucker</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QLabel" name="Gain_label">
+    <property name="geometry">
+     <rect>
+      <x>440</x>
+      <y>220</y>
+      <width>49</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Gain</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="EQ_labels">
+    <property name="geometry">
+     <rect>
+      <x>490</x>
+      <y>230</y>
       <width>91</width>
-      <height>181</height>
+      <height>16</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Ink Free</family>
+     </font>
+    </property>
+    <property name="text">
+     <string>Bass Mid Treble</string>
     </property>
    </widget>
-   <widget class="QProgressBar" name="progressBar">
+   <widget class="QLabel" name="Chorus_labels">
     <property name="geometry">
      <rect>
-      <x>0</x>
-      <y>263</y>
-      <width>751</width>
-      <height>20</height>
+      <x>1020</x>
+      <y>240</y>
+      <width>91</width>
+      <height>16</height>
      </rect>
     </property>
-    <property name="minimumSize">
-     <size>
-      <width>0</width>
-      <height>20</height>
-     </size>
+    <property name="text">
+     <string>Rate      Width</string>
     </property>
-    <property name="value">
-     <number>24</number>
+   </widget>
+   <widget class="QCheckBox" name="checkBox">
+    <property name="geometry">
+     <rect>
+      <x>390</x>
+      <y>190</y>
+      <width>41</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>OD</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="Chorus_check">
+    <property name="geometry">
+     <rect>
+      <x>910</x>
+      <y>190</y>
+      <width>76</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Chorus</string>
     </property>
    </widget>
   </widget>
@@ -67,7 +308,7 @@ E|-----------------|</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>800</width>
+     <width>1211</width>
      <height>21</height>
     </rect>
    </property>
@@ -76,7 +317,13 @@ E|-----------------|</string>
      <string>GuitarTabStudio</string>
     </property>
    </widget>
+   <widget class="QMenu" name="menu1_0">
+    <property name="title">
+     <string>1.0</string>
+    </property>
+   </widget>
    <addaction name="menuGuitarTabStudio"/>
+   <addaction name="menu1_0"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
