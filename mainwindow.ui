@@ -20,7 +20,7 @@
    <widget class="QPlainTextEdit" name="TabWindow">
     <property name="geometry">
      <rect>
-      <x>0</x>
+      <x>40</x>
       <y>0</y>
       <width>1161</width>
       <height>141</height>

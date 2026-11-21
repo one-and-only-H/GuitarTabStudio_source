@@ -69,7 +69,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->Pause_button->setEnabled(false);
     ui->Stop_button->setEnabled(false);
 
-    timerProgreso_.setInterval(50); // 20 FPS para el cursor visual
+    timerProgreso_.setInterval(50);
     connect(&timerProgreso_, &QTimer::timeout,
             this, &MainWindow::onActualizarProgresoAudio);
 }
@@ -98,17 +98,14 @@ void MainWindow::configurarVisorYScroll()
     connect(ui->Tab_scrollbar, &QScrollBar::valueChanged,
             ui->TabWindow->horizontalScrollBar(), &QScrollBar::setValue);
 
-    // Seek cuando el usuario arrastra manualmente la barra
     connect(ui->Tab_scrollbar, &QScrollBar::sliderMoved,
             this, &MainWindow::onScrollUsuarioSeek);
 }
 
 void MainWindow::configurarControlesDSP()
 {
-    // Pastillas: Single Coil por defecto
     ui->Single_Coil_select->setChecked(true);
 
-    // Dials sin vuelta completa y con muescas visibles
     for (QDial *dial : {ui->Gain_dial, ui->Rate_dial, ui->Width_dial}) {
         dial->setRange(0, 100);
         dial->setWrapping(false);
@@ -118,20 +115,17 @@ void MainWindow::configurarControlesDSP()
     ui->Rate_dial->setValue(20);
     ui->Width_dial->setValue(50);
 
-    // EQ vertical: 0..100 (50 = neutro)
     for (QSlider *slider : {ui->Bass_slider, ui->Mid_slider, ui->Treble_slider}) {
         slider->setRange(0, 100);
         slider->setValue(50);
     }
 
-    // Estados iniciales de efectos
-    ui->checkBox->setChecked(false);    // OD apagado
-    ui->Chorus_check->setChecked(true); // Chorus encendido (coincide con AudioPlayer default)
+    ui->checkBox->setChecked(false);
+    ui->Chorus_check->setChecked(true);
     ui->Gain_dial->setEnabled(false);
     ui->Rate_dial->setEnabled(true);
     ui->Width_dial->setEnabled(true);
 
-    // Habilitar/deshabilitar dials según sus switches
     connect(ui->checkBox, &QCheckBox::toggled,
             ui->Gain_dial, &QDial::setEnabled);
     connect(ui->Chorus_check, &QCheckBox::toggled,
@@ -139,7 +133,6 @@ void MainWindow::configurarControlesDSP()
     connect(ui->Chorus_check, &QCheckBox::toggled,
             ui->Width_dial, &QDial::setEnabled);
 
-    // Conectar todos los controles al actualizador DSP en tiempo real
     connect(ui->Single_Coil_select, &QRadioButton::toggled,
             this, &MainWindow::onActualizarParametrosDSP);
     connect(ui->Humbucker_select, &QRadioButton::toggled,
@@ -163,25 +156,21 @@ void MainWindow::configurarControlesDSP()
     connect(ui->Treble_slider, &QSlider::valueChanged,
             this, &MainWindow::onActualizarParametrosDSP);
 
-    // Sincronizar valores iniciales con AudioPlayer
     player_.setGain(0.85f);
     onActualizarParametrosDSP();
 }
 
 void MainWindow::onActualizarParametrosDSP()
 {
-    // 1. Pastilla
     player_.setTipoPastilla(
         ui->Humbucker_select->isChecked()
             ? TipoPastilla::HUMBUCKER
             : TipoPastilla::SINGLE_COIL
     );
 
-    // 2. Overdrive y Drive
     player_.setODActive(ui->checkBox->isChecked());
     player_.setODDrive(mapearRango(ui->Gain_dial->value(), 0, 100, OD_DIAL_MIN, OD_DIAL_MAX));
 
-    // 3. EQ de 3 bandas (50 -> 1.0 neutro exacto)
     auto mapearEQ = [](int val) -> float {
         if (val <= 50) {
             return mapearRango(val, 0, 50, EQ_GAIN_MIN, EQ_GAIN_NEUTRO);
@@ -192,7 +181,6 @@ void MainWindow::onActualizarParametrosDSP()
     player_.setMid(mapearEQ(ui->Mid_slider->value()));
     player_.setTreble(mapearEQ(ui->Treble_slider->value()));
 
-    // 4. Chorus
     player_.setChorusActive(ui->Chorus_check->isChecked());
     player_.setCRate(mapearRango(ui->Rate_dial->value(), 0, 100, CHORUS_RATE_MIN, CHORUS_RATE_MAX));
     player_.setCDepth(mapearRango(ui->Width_dial->value(), 0, 100, 0.0f, 1.0f));
@@ -215,7 +203,6 @@ void MainWindow::onAbrirCancion()
         return;
     }
 
-    // Detener reproducción anterior si estaba activa
     timerProgreso_.stop();
     player_.stop();
     estabaPausado_ = false;
@@ -319,11 +306,23 @@ void MainWindow::cargarYMapearCSV(const QString &rutaCSV)
         const std::string tab = TabGenerator::generarTablatura(ultimoResultado_, cfg);
         tablaturaActual_ = QString::fromStdString(tab);
 
+        // Construir tabla no-lineal (tiempo -> caracteres) respetando silencios | xN |
+        mapaTiempoScroll_.clear();
+        auto cols = TabGenerator::construirColumnas(ultimoResultado_, cfg);
+        double charAcum = 0.0;
+        mapaTiempoScroll_.push_back({0.0, 0.0});
+        for (const auto &c : cols) {
+            mapaTiempoScroll_.push_back({c.timestamp, charAcum});
+            charAcum += static_cast<double>(c.ancho_visual);
+            mapaTiempoScroll_.push_back({c.timestamp + c.duracion, charAcum});
+        }
+        totalCharsTab_ = std::max(1.0, charAcum);
+
         ui->TabWindow->setPlainText(tablaturaActual_);
         ui->Tab_scrollbar->setValue(0);
         ui->Exportar_button->setEnabled(true);
 
-        // 2. Preparar AudioPlayer con las notas cargadas
+        // 2. Preparar AudioPlayer
         if (!player_.prepararPista(notasActuales_, SAMPLE_RATE)) {
             QMessageBox::warning(this, "Audio", "No se pudo preparar la pista de audio.");
         }
@@ -402,7 +401,6 @@ void MainWindow::onStopClicked()
 
 void MainWindow::onActualizarProgresoAudio()
 {
-    // Si la canción terminó de reproducirse naturalmente en su hilo
     if (!player_.estaReproduciendo() && !estabaPausado_) {
         timerProgreso_.stop();
         ui->Play_button->setEnabled(!notasActuales_.empty());
@@ -412,23 +410,37 @@ void MainWindow::onActualizarProgresoAudio()
         return;
     }
 
-    const float tActual = player_.obtenerTiempoActual();
-    if (duracionTotalCancion_ > 0.0) {
-        const double proporcion = std::clamp(
-            static_cast<double>(tActual) / duracionTotalCancion_,
-            0.0,
-            1.0
+    const double tActual = static_cast<double>(player_.obtenerTiempoActual());
+    double posCharActual = 0.0;
+
+    if (!mapaTiempoScroll_.empty()) {
+        auto it = std::lower_bound(
+            mapaTiempoScroll_.begin(), mapaTiempoScroll_.end(), tActual,
+            [](const PuntoMapaTiempo &p, double t) { return p.tiempoSeg < t; }
         );
-        const int maxScroll = ui->Tab_scrollbar->maximum();
-        actualizandoScrollDesdeAudio_ = true;
-        ui->Tab_scrollbar->setValue(static_cast<int>(proporcion * maxScroll));
-        actualizandoScrollDesdeAudio_ = false;
+        if (it == mapaTiempoScroll_.begin()) {
+            posCharActual = it->posChar;
+        } else if (it == mapaTiempoScroll_.end()) {
+            posCharActual = mapaTiempoScroll_.back().posChar;
+        } else {
+            const auto &p1 = *it;
+            const auto &p0 = *(it - 1);
+            const double dt = std::max(1e-6, p1.tiempoSeg - p0.tiempoSeg);
+            const double alpha = std::clamp((tActual - p0.tiempoSeg) / dt, 0.0, 1.0);
+            posCharActual = p0.posChar + alpha * (p1.posChar - p0.posChar);
+        }
     }
+
+    const double proporcion = std::clamp(posCharActual / totalCharsTab_, 0.0, 1.0);
+    const int maxScroll = ui->Tab_scrollbar->maximum();
+    actualizandoScrollDesdeAudio_ = true;
+    ui->Tab_scrollbar->setValue(static_cast<int>(proporcion * maxScroll));
+    actualizandoScrollDesdeAudio_ = false;
 }
 
 void MainWindow::onScrollUsuarioSeek(int valorScroll)
 {
-    if (actualizandoScrollDesdeAudio_ || duracionTotalCancion_ <= 0.0) {
+    if (actualizandoScrollDesdeAudio_ || mapaTiempoScroll_.empty()) {
         return;
     }
 
@@ -437,10 +449,28 @@ void MainWindow::onScrollUsuarioSeek(int valorScroll)
         return;
     }
 
-    const float segundoDestino = static_cast<float>(
-        (static_cast<double>(valorScroll) / static_cast<double>(maxScroll)) * duracionTotalCancion_
+    const double charObjetivo =
+        (static_cast<double>(valorScroll) / static_cast<double>(maxScroll)) * totalCharsTab_;
+
+    auto it = std::lower_bound(
+        mapaTiempoScroll_.begin(), mapaTiempoScroll_.end(), charObjetivo,
+        [](const PuntoMapaTiempo &p, double c) { return p.posChar < c; }
     );
-    player_.seek(segundoDestino);
+
+    double segundoDestino = 0.0;
+    if (it == mapaTiempoScroll_.begin()) {
+        segundoDestino = it->tiempoSeg;
+    } else if (it == mapaTiempoScroll_.end()) {
+        segundoDestino = mapaTiempoScroll_.back().tiempoSeg;
+    } else {
+        const auto &p1 = *it;
+        const auto &p0 = *(it - 1);
+        const double dc = std::max(1e-6, p1.posChar - p0.posChar);
+        const double alpha = std::clamp((charObjetivo - p0.posChar) / dc, 0.0, 1.0);
+        segundoDestino = p0.tiempoSeg + alpha * (p1.tiempoSeg - p0.tiempoSeg);
+    }
+
+    player_.seek(static_cast<float>(segundoDestino));
 }
 
 void MainWindow::onExportarTablatura()

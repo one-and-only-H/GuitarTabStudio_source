@@ -2,7 +2,6 @@
 
 #include <limits>
 
-
 namespace {
 
 BiquadCoef normalizarCoeficientes(float b0, float b1, float b2,
@@ -60,11 +59,6 @@ BiquadCoef peakingEQ(float frecuencia, float ganancia, float Q, float sampleRate
     return normalizarCoeficientes(b0, b1, b2, a0, a1, a2);
 }
 
-/*
-cuando se hace seek al visor de la tab, se reconstruye el estado de la envolvente,
-osea, no va a iniciar ya en el attack de cada nota para simplificar, directamente
-busca en que momento de la ADSR estaba y continua desde ahí
-*/
 void reconstruirEnvolvente(EnvolventeADSR& env, float elapsed,
                            float duracion, float ataque, float decayRate,
                            float sustain, float release) {
@@ -127,10 +121,9 @@ NotaSonando crearNotaSonando(const Nota& nota, TipoPastilla pastilla, float elap
     const float velocidad = std::clamp(static_cast<float>(nota.velocidad) / 127.0f, 0.0f, 1.0f);
     ns.volumenVelocity = velocidad * velocidad;
 
-    //funciones que ya defini en el .h
     const float frecuenciaBase = obtenerFrecuencia(nota.pitch);
     const auto armonicos = dividirEnArmonicos(frecuenciaBase);
-    ns.perfil = obtenerPerfil(pastilla, TipoAtaque::LET_RING); //PLACEHOLDER, FALTA PONER Q TAMBIEN PUEDA SER MUTED
+    ns.perfil = obtenerPerfil(pastilla, TipoAtaque::LET_RING);
 
     for (int h = 0; h < NUM_HARMONICS; h++) {
         ns.frecuencias[h] = armonicos[h];
@@ -146,29 +139,31 @@ NotaSonando crearNotaSonando(const Nota& nota, TipoPastilla pastilla, float elap
 
 bool notaSigueSonando(const NotaSonando& ns) {
     for (int h = 0; h < NUM_HARMONICS; h++) {
-        if (ns.envolventes[h].estado != EstadoADSR::OFF) return true;
+        if (ns.envolventes[h].estado != EstadoADSR::OFF &&
+            ns.envolventes[h].valorActual > 0.003f) {
+            return true;
+        }
     }
     return false;
 }
-
 } // namespace
 
-//no me voy a pelear con windows.h, aqui entra la IA evidentemente
+
+//yo tengo cara de querer pelearme con la api de windows? 
+
 
 AudioPlayer::AudioPlayer() {
-    bufferPCM.resize(BLOQUE_MUESTRAS);
     actualizarCoefsEQ();
 }
 
 AudioPlayer::~AudioPlayer() {
     stop();
 }
-
+//al menos esta parte la supe hacer
 bool AudioPlayer::prepararPista(const std::vector<Nota>& notas, uint32_t sampleRate) {
     if (reproduciendo.load()) return false;
     if (sampleRate != SAMPLE_RATE) return false;
 
-    // Si la reproducción terminó naturalmente, recoger el hilo antes de tocar su estado.
     if (hiloAudio.joinable()) hiloAudio.join();
 
     notasPista = notas;
@@ -184,6 +179,7 @@ bool AudioPlayer::prepararPista(const std::vector<Nota>& notas, uint32_t sampleR
     return true;
 }
 
+//c ya later
 void AudioPlayer::play() {
     if (reproduciendo.load()) return;
     if (hiloAudio.joinable()) hiloAudio.join();
@@ -213,13 +209,12 @@ void AudioPlayer::seek(float segundo) {
     if (!reproduciendo.load() || !std::isfinite(segundo)) return;
     paramSeek.store(std::max(0.0f, segundo));
 }
-
+//llamar de nuevo a lo del .h
 void AudioPlayer::actualizarCoefsEQ() {
     const float bass = std::clamp(paramBass.load(), EQ_GAIN_MIN, EQ_GAIN_MAX);
     const float mid = std::clamp(paramMid.load(), EQ_GAIN_MIN, EQ_GAIN_MAX);
     const float treble = std::clamp(paramTreble.load(), EQ_GAIN_MIN, EQ_GAIN_MAX);
 
-    // EQ de tres bandas: low shelf 250 Hz, campana 1 kHz, high shelf 4 kHz.
     eqCoefs.bass = lowShelf(250.0f, bass, static_cast<float>(SAMPLE_RATE));
     eqCoefs.mid = peakingEQ(1000.0f, mid, 0.707f, static_cast<float>(SAMPLE_RATE));
     eqCoefs.treble = highShelf(4000.0f, treble, static_cast<float>(SAMPLE_RATE));
@@ -240,17 +235,27 @@ void AudioPlayer::bucleReproduccion() {
         return;
     }
 
-    WAVEHDR header{};
-    header.lpData = reinterpret_cast<LPSTR>(bufferPCM.data());
-    header.dwBufferLength = static_cast<DWORD>(bufferPCM.size() * sizeof(int16_t));
+    // Doble buffer (ping-pong) para evitar cortes/pops entre bloques
+    constexpr int NUM_BUFFERS = 3;
+    std::vector<int16_t> buffersPCM[NUM_BUFFERS];
+    WAVEHDR headers[NUM_BUFFERS]{};
 
-    if (waveOutPrepareHeader(hWaveOut, &header, sizeof(WAVEHDR)) != MMSYSERR_NOERROR) {
-        waveOutClose(hWaveOut);
-        hWaveOut = nullptr;
-        reproduciendo.store(false);
-        return;
+    for (int b = 0; b < NUM_BUFFERS; ++b) {
+        buffersPCM[b].resize(BLOQUE_MUESTRAS, 0);
+        headers[b].lpData = reinterpret_cast<LPSTR>(buffersPCM[b].data());
+        headers[b].dwBufferLength = static_cast<DWORD>(BLOQUE_MUESTRAS * sizeof(int16_t));
+
+        if (waveOutPrepareHeader(hWaveOut, &headers[b], sizeof(WAVEHDR)) != MMSYSERR_NOERROR) {
+            for (int j = 0; j < b; ++j) waveOutUnprepareHeader(hWaveOut, &headers[j], sizeof(WAVEHDR));
+            waveOutClose(hWaveOut);
+            hWaveOut = nullptr;
+            reproduciendo.store(false);
+            return;
+        }
+        headers[b].dwFlags |= WHDR_DONE;
     }
 
+    int bufIdx = 0;
     double tiempoCursor = 0.0;
     size_t indiceNotaActual = 0;
     std::vector<NotaSonando> notasActivas;
@@ -269,8 +274,7 @@ void AudioPlayer::bucleReproduccion() {
             if (waveOutRestart(hWaveOut) == MMSYSERR_NOERROR) dispositivoPausado = false;
         }
     };
-//=========================
-//empieza lo bueno
+
     while (reproduciendo.load()) {
         while (reproduciendo.load() && pausado.load()) {
             sincronizarPausa();
@@ -293,10 +297,12 @@ void AudioPlayer::bucleReproduccion() {
         for (int m = 0; m < BLOQUE_MUESTRAS; m++) {
             const double tiempoMuestra = tiempoCursor;
 
-            // Disparo de notas sample-accurate
             if (estadoFade == 0 || estadoFade == 2) {
                 while (indiceNotaActual < notasPista.size() &&
                        notasPista[indiceNotaActual].timestamp <= tiempoMuestra) {
+                    if (notasActivas.size() >= 18) { // (ahora pongo más explciación de por qué cortar notas sobre el límite ideal)
+                        notasActivas.erase(notasActivas.begin()); //sobre lo de arriba, es que me está consumiendo 20% de la cpu, lanzar eso sería un crimen
+                    }
                     notasActivas.push_back(crearNotaSonando(notasPista[indiceNotaActual], pastillaActual, 0.0f));
                     ++indiceNotaActual;
                 }
@@ -316,23 +322,29 @@ void AudioPlayer::bucleReproduccion() {
             }
 
             const int cantidadNotas = std::max(1, static_cast<int>(notasActivas.size()));
-            float muestra = normalizar(sumaNotas, cantidadNotas); // definida en .h
+            float muestra = normalizar(sumaNotas, cantidadNotas);
 
-            // Cadena: EQ -> overdrive -> chorus -> volumen de salida -> limitador.
             muestra = aplicarEQ(muestra, eqEstados, eqCoefs);
             muestra = aplicarOverdrive(muestra, driveActual, odActivoActual);
+            //un pequeño filtro para simular cómo se comen los agudos los parlantes -by herre
+            static float filtroCabina = 0.0f;
+                if (odActivoActual) {
+                    filtroCabina += 0.38f * (muestra - filtroCabina);
+                    muestra = filtroCabina;
+                } else {
+                    filtroCabina = muestra;
+                }
+
             if (chorusActivoActual) {
                 muestra = aplicarChorus(muestra, bufferChorus, writeIndexChorus,
                                          faseLFO, static_cast<float>(SAMPLE_RATE),
                                          rateActual, depthActual);
             } else {
-                // Mantener la línea de retardo fresca mientras el efecto está apagado.
                 guardarBufferChorus(bufferChorus, writeIndexChorus, muestra);
             }
             muestra *= gainActual;
             const float muestraLimitada = limitarSeñalFinal(muestra);
 
-            // Fade-out, salto temporal y fade-in sin mezclar el índice del bloque anterior.
             if (estadoFade == 1) {
                 multiplicadorFade -= pasoFade;
                 if (multiplicadorFade <= 0.0f) {
@@ -369,21 +381,20 @@ void AudioPlayer::bucleReproduccion() {
             tiempoCursor += 1.0 / SAMPLE_RATE;
         }
 
-        for (int m = 0; m < BLOQUE_MUESTRAS; m++) {
-            bufferPCM[m] = convertirPCM(bufferFloat[m]);
-        }
-//=============================================
-//hola de nuevo, contendiente de windows.h
-//============================================
-        if (waveOutWrite(hWaveOut, &header, sizeof(WAVEHDR)) != MMSYSERR_NOERROR) break;
-
-        // Esperar al bloque actual. Pausar el dispositivo sin reutilizar el WAVEHDR.
+        // Esperar solo si ambos buffers siguen en cola
         while (reproduciendo.load()) {
             sincronizarPausa();
-            if (header.dwFlags & WHDR_DONE) break;
+            if (headers[bufIdx].dwFlags & WHDR_DONE) break;
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         if (!reproduciendo.load()) break;
+
+        for (int m = 0; m < BLOQUE_MUESTRAS; m++) {
+            buffersPCM[bufIdx][m] = convertirPCM(bufferFloat[m]);
+        }
+
+        if (waveOutWrite(hWaveOut, &headers[bufIdx], sizeof(WAVEHDR)) != MMSYSERR_NOERROR) break;
+        bufIdx = (bufIdx + 1) % NUM_BUFFERS;
 
         tiempoActual.store(static_cast<float>(tiempoCursor));
 
@@ -393,7 +404,6 @@ void AudioPlayer::bucleReproduccion() {
             notasActivas.end()
         );
 
-        // Solo terminar después de que el último bloque haya sido reproducido.
         if (indiceNotaActual >= notasPista.size() && notasActivas.empty() &&
             paramSeek.load() < 0.0f) {
             reproduciendo.store(false);
@@ -401,10 +411,11 @@ void AudioPlayer::bucleReproduccion() {
         }
     }
 
-    // El hilo de audio es el único propietario del ciclo de vida del dispositivo.
     if (hWaveOut) {
-        waveOutReset(hWaveOut); // Detiene cualquier bloque pendiente y libera el encabezado.
-        waveOutUnprepareHeader(hWaveOut, &header, sizeof(WAVEHDR));
+        waveOutReset(hWaveOut);
+        for (int b = 0; b < NUM_BUFFERS; ++b) {
+            waveOutUnprepareHeader(hWaveOut, &headers[b], sizeof(WAVEHDR));
+        }
         waveOutClose(hWaveOut);
         hWaveOut = nullptr;
     }

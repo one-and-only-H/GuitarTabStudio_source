@@ -23,9 +23,10 @@ constexpr float MAX_PCM_VALUE = 32767.0f;
 constexpr int NUM_HARMONICS = 7;
 constexpr double PI = 3.14159265358979323846;
 
-// Overdrive
-constexpr float OD_DIAL_MIN = 0.235f;
-constexpr float OD_DIAL_MAX = 2.5f;
+
+// Overdrive (rango real de pre-ganancia para saturar señales de ~0.06 de amplitud)
+constexpr float OD_DIAL_MIN = 4.0f;
+constexpr float OD_DIAL_MAX = 32.0f;
 
 // EQ: ganancia lineal de cada banda
 constexpr float EQ_GAIN_MIN = 0.1f;
@@ -40,7 +41,8 @@ constexpr float CHORUS_RATE_MIN = 0.1f;
 constexpr float CHORUS_RATE_MAX = 5.0f;
 
 // Audio
-constexpr int BLOQUE_MUESTRAS = 2048;
+// Audio: bloque de 4096 muestras para cero underruns en Windows
+constexpr int BLOQUE_MUESTRAS = 4096;
 constexpr float FADE_TIME = 0.01f; // 10 ms para el micro-fade del seek
 constexpr float LIMITADOR_UMBRAL = 0.9f;
 
@@ -125,9 +127,24 @@ inline std::array<float, NUM_HARMONICS> dividirEnArmonicos(float frecuenciaFunda
 }
 
 inline float generarOndaArmonico(float frecuencia, float& fase, float sampleRate) {
-    const float valor = std::sin(fase);
-    const float incrementoFase = (2.0f * static_cast<float>(PI) * frecuencia) / sampleRate;
-    fase = std::fmod(fase + incrementoFase, 2.0f * static_cast<float>(PI)); // para mantener exactitud, siempre reiniciando cuando llegue a 2pi
+    constexpr int LUT_SIZE = 2048; //lut = look up table, para que no tenga que hacer los calculos en ejecucion
+    constexpr float DOS_PI = 2.0f * static_cast<float>(PI);
+    static const std::array<float, LUT_SIZE> tablaSeno = []() {
+        std::array<float, LUT_SIZE> t{};
+        for (int i = 0; i < LUT_SIZE; ++i) {
+            t[i] = std::sin((DOS_PI * static_cast<float>(i)) / static_cast<float>(LUT_SIZE));
+        }
+        return t;
+    }();
+
+    const float pos = (fase / DOS_PI) * static_cast<float>(LUT_SIZE);
+    const int idx0 = static_cast<int>(pos) & (LUT_SIZE - 1);
+    const int idx1 = (idx0 + 1) & (LUT_SIZE - 1);
+    const float frac = pos - static_cast<float>(static_cast<int>(pos));
+    const float valor = tablaSeno[idx0] * (1.0f - frac) + tablaSeno[idx1] * frac;
+
+    fase += (DOS_PI * frecuencia) / sampleRate;
+    if (fase >= DOS_PI) fase -= DOS_PI;
     return valor;
 }
 
@@ -145,29 +162,32 @@ inline void generarPreSamples(
 inline PerfilArmonico obtenerPerfil(TipoPastilla pastilla, TipoAtaque ataque) {
     PerfilArmonico perfil{};
 
-    if (pastilla == TipoPastilla::SINGLE_COIL) { 
-        const float p[] = {1.0f, 0.8f, 0.7f, 0.6f, 0.5f, 0.4f, 0.3f};
-        const float d[] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    if (pastilla == TipoPastilla::SINGLE_COIL) {
+        // Brillante y percusiva: armónicos medios/altos marcados pero con caída rápida
+        const float p[] = {1.0f, 0.85f, 0.75f, 0.55f, 0.35f, 0.20f, 0.10f};
+        const float d[] = {1.4f, 0.9f,  0.55f, 0.35f, 0.22f, 0.15f, 0.10f};
         std::copy(p, p + NUM_HARMONICS, perfil.pesos);
         std::copy(d, d + NUM_HARMONICS, perfil.tasasDecaimiento);
-    } else { //tipo = humbucker
-        const float p[] = {1.0f, 0.9f, 0.6f, 0.3f, 0.2f, 0.1f, 0.05f};
-        const float d[] = {1.0f, 1.2f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f};
+    } else {
+        // Humbucker: más cuerpo en fundamental/2do armónico, agudos recortados
+        const float p[] = {1.0f, 0.95f, 0.50f, 0.22f, 0.10f, 0.04f, 0.01f};
+        const float d[] = {1.8f, 1.3f,  0.70f, 0.40f, 0.25f, 0.15f, 0.10f};
         std::copy(p, p + NUM_HARMONICS, perfil.pesos);
         std::copy(d, d + NUM_HARMONICS, perfil.tasasDecaimiento);
     }
 
     if (ataque == TipoAtaque::LET_RING) {
-        const float a[] = {0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f};
-        const float s[] = {0.80f, 0.70f, 0.60f, 0.50f, 0.40f, 0.30f, 0.20f};
-        const float r[] = {0.50f, 0.40f, 0.30f, 0.25f, 0.20f, 0.15f, 0.10f};
+        const float a[] = {0.002f, 0.002f, 0.001f, 0.001f, 0.001f, 0.001f, 0.001f};
+        // Los armónicos agudos mueren casi por completo en sustain (cuerda real, no órgano/piano)
+        const float s[] = {0.65f,  0.45f,  0.22f,  0.08f,  0.02f,  0.00f,  0.00f};
+        const float r[] = {0.25f,  0.18f,  0.12f,  0.08f,  0.05f,  0.03f,  0.02f};
         std::copy(a, a + NUM_HARMONICS, perfil.ataques);
         std::copy(s, s + NUM_HARMONICS, perfil.sustentos);
         std::copy(r, r + NUM_HARMONICS, perfil.releases);
-    } else { //tipo = muted
-        const float a[] = {0.003f, 0.003f, 0.003f, 0.003f, 0.003f, 0.003f, 0.003f};
-        const float s[] = {0.10f, 0.08f, 0.05f, 0.03f, 0.02f, 0.01f, 0.00f};
-        const float r[] = {0.05f, 0.04f, 0.03f, 0.02f, 0.01f, 0.01f, 0.01f};
+    } else {
+        const float a[] = {0.002f, 0.002f, 0.001f, 0.001f, 0.001f, 0.001f, 0.001f};
+        const float s[] = {0.05f,  0.03f,  0.01f,  0.00f,  0.00f,  0.00f,  0.00f};
+        const float r[] = {0.04f,  0.03f,  0.02f,  0.01f,  0.01f,  0.01f,  0.01f};
         std::copy(a, a + NUM_HARMONICS, perfil.ataques);
         std::copy(s, s + NUM_HARMONICS, perfil.sustentos);
         std::copy(r, r + NUM_HARMONICS, perfil.releases);
@@ -291,7 +311,12 @@ inline float aplicarEQ(float muestra, EQEstados& estados, const EQCoefs& coefs) 
 inline float aplicarOverdrive(float muestra, float drive, bool odActivo) {
     if (!odActivo) return muestra;
     drive = std::clamp(drive, OD_DIAL_MIN, OD_DIAL_MAX);
-    return std::tanh(drive * muestra);
+    // Clipping asimétrico suave (simula diodos de silicio/válvula) + compensación de nivel
+    const float excitada = muestra * drive;
+    const float saturada = (excitada >= 0.0f)
+        ? std::tanh(excitada)
+        : 0.85f * std::tanh(excitada * 1.15f);
+    return saturada * 0.45f;
 }
 
 inline float lfoChorus(float& faseLFO, float rate, float sampleRate) {

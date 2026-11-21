@@ -50,6 +50,14 @@ private:
     bool estabaPausado_ = false;
     bool actualizandoScrollDesdeAudio_ = false;
 
+    // Mapa tiempo (segundos) <-> posición visual en caracteres (respeta silencios | xN |)
+    struct PuntoMapaTiempo {
+        double tiempoSeg = 0.0;
+        double posChar = 0.0;
+    };
+    std::vector<PuntoMapaTiempo> mapaTiempoScroll_;
+    double totalCharsTab_ = 1.0;
+
     QString rutaArchivoActual_;
     QString tablaturaActual_;
     Mapper::ResultadoMapeo ultimoResultado_;
