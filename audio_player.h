@@ -11,288 +11,104 @@
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include <memory>
+
 #include "tipos.h"
+#include "sintetizador.h"
+#include "sintetizador_aditivo.h"
+#include "karplus_strong.h"
 
 #pragma comment(lib, "winmm.lib")
 
-// ============================================================
-// CONSTANTES
-// ============================================================
+// Parametros generales de audio PCM
 constexpr uint32_t SAMPLE_RATE = 44100;
 constexpr float MAX_PCM_VALUE = 32767.0f;
-constexpr int NUM_HARMONICS = 7;
 constexpr double PI = 3.14159265358979323846;
 
+// Rango de ganancia aditiva con tope maximo de 100x
+// Gain_dial aporta de 1x a 60x y el boton OD suma +40x fijos
+constexpr float GAIN_DIAL_MIN = 1.0f;
+constexpr float GAIN_DIAL_MAX = 60.0f;
+constexpr float OD_BOOST_FIJO = 40.0f;
+constexpr float GAIN_TOTAL_MAX = 100.0f;
 
-// Overdrive (rango real de pre-ganancia para saturar señales de ~0.06 de amplitud)
-constexpr float OD_DIAL_MIN = 4.0f;
-constexpr float OD_DIAL_MAX = 32.0f;
-
-// EQ: ganancia lineal de cada banda
+// Rango lineal del ecualizador de 3 bandas
 constexpr float EQ_GAIN_MIN = 0.1f;
 constexpr float EQ_GAIN_MAX = 2.0f;
 constexpr float EQ_GAIN_NEUTRO = 1.0f;
 
-// Chorus
-constexpr float CHORUS_DELAY_BASE = 0.015f;
-constexpr float CHORUS_DELAY_MOD = 0.005f;
+// Parametros de Analog Chorus estilo BBD (retardo corto sin timbre ahogado)
+constexpr float CHORUS_DELAY_BASE = 0.0055f;
+constexpr float CHORUS_DELAY_MOD = 0.0028f;
 constexpr int CHORUS_BUFFER_SIZE = 4096;
-constexpr float CHORUS_RATE_MIN = 0.1f;
-constexpr float CHORUS_RATE_MAX = 5.0f;
+constexpr float CHORUS_RATE_MIN = 0.15f;
+constexpr float CHORUS_RATE_MAX = 4.5f;
 
-// Audio
-// Audio: bloque de 4096 muestras para cero underruns en Windows
+// Tamano de bloque de salida y proteccion de picos
 constexpr int BLOQUE_MUESTRAS = 4096;
-constexpr float FADE_TIME = 0.01f; // 10 ms para el micro-fade del seek
-constexpr float LIMITADOR_UMBRAL = 0.9f;
+constexpr float FADE_TIME = 0.01f;
+constexpr float LIMITADOR_UMBRAL = 0.92f;
 
-// ============================================================
-// STRUCTS
-// ============================================================
-
-enum class TipoPastilla { SINGLE_COIL, HUMBUCKER };
-enum class TipoAtaque { LET_RING, MUTED };
-enum class EstadoADSR { ATTACK, DECAY, SUSTAIN, RELEASE, OFF };
-
-struct PerfilArmonico {
-    float pesos[NUM_HARMONICS]{};
-    float tasasDecaimiento[NUM_HARMONICS]{};
-    float ataques[NUM_HARMONICS]{};
-    float sustentos[NUM_HARMONICS]{};
-    float releases[NUM_HARMONICS]{};
-};
-
-struct EnvolventeADSR {
-    EstadoADSR estado = EstadoADSR::OFF;
-    float valorActual = 0.0f;
-    float valorInicioRelease = 0.0f;
-    float tiempoEnEstado = 0.0f;
-};
-
-struct NotaSonando {
-    int pitchOriginal = -1;
-    float duracionTotal = 0.0f;
-    float tiempoTranscurrido = 0.0f;
-    float timestampInicio = 0.0f;
-    float volumenVelocity = 0.0f;
-
-    float frecuencias[NUM_HARMONICS]{};
-    float fases[NUM_HARMONICS]{};
-    EnvolventeADSR envolventes[NUM_HARMONICS]{};
-    PerfilArmonico perfil{};
-};
-
-// --- EQ (secciones biquad) ---
-//voy a quemar ese cookbook...
+// Coeficientes normalizados para filtro Biquad IIR de segundo orden
 struct BiquadCoef {
     float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, a1 = 0.0f, a2 = 0.0f;
 };
 
+// Registros de retardo por muestra (Direct Form I)
 struct BiquadEstado {
     float x1 = 0.0f, x2 = 0.0f;
     float y1 = 0.0f, y2 = 0.0f;
 };
 
+// Banco de coeficientes para ecualizador de 3 bandas
 struct EQCoefs {
     BiquadCoef bass;
     BiquadCoef mid;
     BiquadCoef treble;
 };
 
+// Estados internos del ecualizador de 3 bandas
 struct EQEstados {
     BiquadEstado bass;
     BiquadEstado mid;
     BiquadEstado treble;
 };
 
-// ============================================================
-// FUNCIONES PRIMITIVAS (inline)
-// ============================================================
+// Banco de 5 filtros Biquad en cascada que modelan un gabinete 4x12 Celestion V30
+struct CabSimCoefs {
+    BiquadCoef hpSub;         // Corte subsonico en 75 Hz para limpiar graves sueltos
+    BiquadCoef resCaja;       // Resonancia de caja cerrada alrededor de 98 Hz
+    BiquadCoef scoopMedios;   // Atenuacion de medios-graves encajonados en 360 Hz
+    BiquadCoef presenciaCono; // Pico caracteristico de presencia del cono en 2400 Hz
+    BiquadCoef rolloffCono;   // Caida natural del altavoz por encima de 4200 Hz
+};
 
+// Registros de estado para las 5 etapas del CabSim compartido
+struct CabSimEstados {
+    BiquadEstado hpSub;
+    BiquadEstado resCaja;
+    BiquadEstado scoopMedios;
+    BiquadEstado presenciaCono;
+    BiquadEstado rolloffCono;
+};
+
+// Estado interno de la etapa de Overdrive/Distortion dinamica
+struct OverdriveEstado {
+    float hpPrevIn = 0.0f;
+    float hpPrevOut = 0.0f;
+    float envolvente = 0.0f;
+    float dcBlockIn = 0.0f;
+    float dcBlockOut = 0.0f;
+};
+
+// Convierte muestra flotante [-1, 1] a entero PCM de 16 bits con saturacion segura
 inline int16_t convertirPCM(float muestra) {
-    muestra = std::clamp(muestra, -1.0f, 1.0f); // limitar por si acaso, poco probable igual que se pase
+    muestra = std::clamp(muestra, -1.0f, 1.0f);
     return static_cast<int16_t>(muestra * MAX_PCM_VALUE);
 }
 
-inline float obtenerFrecuencia(int pitch) {
-    return 440.0f * std::pow(2.0f, (pitch - 69) / 12.0f);
-}
-
-inline std::array<float, NUM_HARMONICS> dividirEnArmonicos(float frecuenciaFundamental) {
-    std::array<float, NUM_HARMONICS> armonicos{};
-    for (int i = 0; i < NUM_HARMONICS; i++) {
-        armonicos[i] = frecuenciaFundamental * static_cast<float>(i + 1);
-    }
-    return armonicos;
-}
-
-inline float generarOndaArmonico(float frecuencia, float& fase, float sampleRate) {
-    constexpr int LUT_SIZE = 2048; //lut = look up table, para que no tenga que hacer los calculos en ejecucion
-    constexpr float DOS_PI = 2.0f * static_cast<float>(PI);
-    static const std::array<float, LUT_SIZE> tablaSeno = []() {
-        std::array<float, LUT_SIZE> t{};
-        for (int i = 0; i < LUT_SIZE; ++i) {
-            t[i] = std::sin((DOS_PI * static_cast<float>(i)) / static_cast<float>(LUT_SIZE));
-        }
-        return t;
-    }();
-
-    const float pos = (fase / DOS_PI) * static_cast<float>(LUT_SIZE);
-    const int idx0 = static_cast<int>(pos) & (LUT_SIZE - 1);
-    const int idx1 = (idx0 + 1) & (LUT_SIZE - 1);
-    const float frac = pos - static_cast<float>(static_cast<int>(pos));
-    const float valor = tablaSeno[idx0] * (1.0f - frac) + tablaSeno[idx1] * frac;
-
-    fase += (DOS_PI * frecuencia) / sampleRate;
-    if (fase >= DOS_PI) fase -= DOS_PI;
-    return valor;
-}
-
-inline void generarPreSamples(
-    const float frecuencias[NUM_HARMONICS],
-    float fases[NUM_HARMONICS],
-    float presamples[NUM_HARMONICS],
-    float sampleRate
-) {
-    for (int i = 0; i < NUM_HARMONICS; i++) {
-        presamples[i] = generarOndaArmonico(frecuencias[i], fases[i], sampleRate);
-    }//generar los NUM HARMONICS armónicos de la frecuencia fundamental
-}
-
-inline PerfilArmonico obtenerPerfil(TipoPastilla pastilla, TipoAtaque ataque) {
-    PerfilArmonico perfil{};
-
-    if (pastilla == TipoPastilla::SINGLE_COIL) {
-        // Brillante y percusiva: armónicos medios/altos marcados pero con caída rápida
-        const float p[] = {1.0f, 0.85f, 0.75f, 0.55f, 0.35f, 0.20f, 0.10f};
-        const float d[] = {1.4f, 0.9f,  0.55f, 0.35f, 0.22f, 0.15f, 0.10f};
-        std::copy(p, p + NUM_HARMONICS, perfil.pesos);
-        std::copy(d, d + NUM_HARMONICS, perfil.tasasDecaimiento);
-    } else {
-        // Humbucker: más cuerpo en fundamental/2do armónico, agudos recortados
-        const float p[] = {1.0f, 0.95f, 0.50f, 0.22f, 0.10f, 0.04f, 0.01f};
-        const float d[] = {1.8f, 1.3f,  0.70f, 0.40f, 0.25f, 0.15f, 0.10f};
-        std::copy(p, p + NUM_HARMONICS, perfil.pesos);
-        std::copy(d, d + NUM_HARMONICS, perfil.tasasDecaimiento);
-    }
-
-    if (ataque == TipoAtaque::LET_RING) {
-        const float a[] = {0.002f, 0.002f, 0.001f, 0.001f, 0.001f, 0.001f, 0.001f};
-        // Los armónicos agudos mueren casi por completo en sustain (cuerda real, no órgano/piano)
-        const float s[] = {0.65f,  0.45f,  0.22f,  0.08f,  0.02f,  0.00f,  0.00f};
-        const float r[] = {0.25f,  0.18f,  0.12f,  0.08f,  0.05f,  0.03f,  0.02f};
-        std::copy(a, a + NUM_HARMONICS, perfil.ataques);
-        std::copy(s, s + NUM_HARMONICS, perfil.sustentos);
-        std::copy(r, r + NUM_HARMONICS, perfil.releases);
-    } else {
-        const float a[] = {0.002f, 0.002f, 0.001f, 0.001f, 0.001f, 0.001f, 0.001f};
-        const float s[] = {0.05f,  0.03f,  0.01f,  0.00f,  0.00f,  0.00f,  0.00f};
-        const float r[] = {0.04f,  0.03f,  0.02f,  0.01f,  0.01f,  0.01f,  0.01f};
-        std::copy(a, a + NUM_HARMONICS, perfil.ataques);
-        std::copy(s, s + NUM_HARMONICS, perfil.sustentos);
-        std::copy(r, r + NUM_HARMONICS, perfil.releases);
-    }
-
-    return perfil;
-}
-
-inline float avanzarADSR( //que dolor de cabeza 
-    EnvolventeADSR& env,
-    float tasaDecaimiento,
-    float tiempoAtaque,
-    float nivelSustain,
-    float tiempoRelease,
-    float duracionTotal,
-    float tiempoTranscurrido,
-    float sampleRate
-) {
-    const float dt = 1.0f / sampleRate;
-
-    // La nota puede terminar durante ATTACK o DECAY, no solo en SUSTAIN.
-    if (tiempoTranscurrido >= duracionTotal &&
-        env.estado != EstadoADSR::RELEASE && env.estado != EstadoADSR::OFF) {
-        env.valorInicioRelease = env.valorActual;
-        env.estado = EstadoADSR::RELEASE;
-        env.tiempoEnEstado = 0.0f;
-    }
-
-    env.tiempoEnEstado += dt;
-
-    switch (env.estado) {
-        case EstadoADSR::ATTACK: {
-            const float ataque = std::max(0.001f, tiempoAtaque);
-            env.valorActual = std::min(1.0f, env.tiempoEnEstado / ataque);
-            if (env.valorActual >= 1.0f) {
-                env.valorActual = 1.0f;
-                env.estado = EstadoADSR::DECAY;
-                env.tiempoEnEstado = 0.0f;
-            }
-            break;
-        }
-        case EstadoADSR::DECAY: {
-            const float decay = std::max(0.001f, 0.5f * tasaDecaimiento);
-            const float progreso = std::min(1.0f, env.tiempoEnEstado / decay);
-            env.valorActual = 1.0f - ((1.0f - nivelSustain) * progreso);
-            if (progreso >= 1.0f) {
-                env.valorActual = nivelSustain;
-                env.estado = EstadoADSR::SUSTAIN;
-                env.tiempoEnEstado = 0.0f;
-            }
-            break;
-        }
-        case EstadoADSR::SUSTAIN:
-            env.valorActual = nivelSustain;
-            break;
-        case EstadoADSR::RELEASE: {
-            const float release = std::max(0.001f, tiempoRelease);
-            const float progreso = std::min(1.0f, env.tiempoEnEstado / release);
-            env.valorActual = env.valorInicioRelease * (1.0f - progreso);
-            if (progreso >= 1.0f) {
-                env.valorActual = 0.0f;
-                env.estado = EstadoADSR::OFF;
-            }
-            break;
-        }
-        case EstadoADSR::OFF:
-            env.valorActual = 0.0f;
-            break;
-    }
-
-    return env.valorActual;
-}
-
-inline void aplicarEnvolventes(
-    float presamples[NUM_HARMONICS],
-    EnvolventeADSR envolventes[NUM_HARMONICS],
-    const PerfilArmonico& perfil,
-    float duracionTotal,
-    float tiempoTranscurrido,
-    float sampleRate
-) {
-    for (int i = 0; i < NUM_HARMONICS; i++) {
-        const float valorEnv = avanzarADSR(
-            envolventes[i], perfil.tasasDecaimiento[i], perfil.ataques[i],
-            perfil.sustentos[i], perfil.releases[i], duracionTotal,
-            tiempoTranscurrido, sampleRate
-        );
-        presamples[i] *= valorEnv;
-    }
-}
-//mezcla los armónicos de la nota, segun su peso
-inline float mezclarArmonicos(const float presamples[NUM_HARMONICS], const float pesos[NUM_HARMONICS]) {
-    float suma = 0.0f;
-    for (int i = 0; i < NUM_HARMONICS; i++) {
-        suma += presamples[i] * pesos[i];
-    }
-    return suma / static_cast<float>(NUM_HARMONICS);
-}
-
-inline float normalizar(float suma, int N) {
-    if (N < 1) N = 1;
-    return suma / std::sqrt(static_cast<float>(N)); //con sqrt pq asi no reduce o amplia en exceso
-}
-
-inline float aplicarBiquad(float x, BiquadEstado& s, const BiquadCoef& c) { //thanks Audio EQ cookbook de RBJ
+// Evalua una muestra a traves de un filtro Biquad y actualiza su historial
+inline float aplicarBiquad(float x, BiquadEstado& s, const BiquadCoef& c) {
     const float y = c.b0 * x + c.b1 * s.x1 + c.b2 * s.x2 - c.a1 * s.y1 - c.a2 * s.y2;
     s.x2 = s.x1;
     s.x1 = x;
@@ -301,6 +117,53 @@ inline float aplicarBiquad(float x, BiquadEstado& s, const BiquadCoef& c) { //th
     return y;
 }
 
+// Fase 8/9: Etapa de Overdrive con ganancia aditiva (1x..100x) y bias dinamico
+inline float aplicarOverdrive(float muestra, float gainDial, bool odBoost, OverdriveEstado& st) {
+    const float driveTotal = std::clamp(
+        std::max(1.0f, gainDial) + (odBoost ? OD_BOOST_FIJO : 0.0f),
+        1.0f,
+        GAIN_TOTAL_MAX
+    );
+
+    // Si no hay ganancia aplicada, mantener el historial sincronizado en bypass
+    if (driveTotal <= 1.05f) {
+        st.hpPrevIn = muestra;
+        st.hpPrevOut = muestra;
+        st.envolvente *= 0.99f;
+        st.dcBlockIn = muestra;
+        st.dcBlockOut = muestra;
+        return muestra;
+    }
+
+    // 1. Pre-filtro pasa-altos (~115 Hz) para evitar saturacion fofa en cuerdas graves
+    const float hp = 0.983f * (st.hpPrevOut + muestra - st.hpPrevIn);
+    st.hpPrevIn = muestra;
+    st.hpPrevOut = hp;
+
+    // 2. Detector de envolvente rapido para desplazar el punto de polarizacion (tube sag)
+    const float absIn = std::abs(hp);
+    const float coefEnv = (absIn > st.envolvente) ? 0.04f : 0.0008f;
+    st.envolvente += coefEnv * (absIn - st.envolvente);
+
+    // 3. Primera etapa: saturacion asimetrica suave con bias dinamico (armonicos pares)
+    const float biasDinamico = 0.05f + 0.14f * std::clamp(st.envolvente * 2.5f, 0.0f, 1.0f);
+    const float pre1 = hp * (driveTotal * 0.34f) + biasDinamico;
+    const float et1 = std::tanh(pre1) - std::tanh(biasDinamico);
+
+    // 4. Segunda etapa: recorte mas firme tipo diodos de silicio con compensacion de nivel
+    const float impulsoEt2 = 1.35f + (driveTotal / GAIN_TOTAL_MAX) * 2.4f;
+    const float pre2 = et1 * impulsoEt2;
+    const float clipped = std::clamp(std::tanh(pre2 * 1.25f), -0.78f, 0.72f);
+
+    // 5. Bloqueador DC para centrar la onda asimetrica antes del EQ y el CabSim
+    const float dcOut = 0.995f * (st.dcBlockOut + clipped - st.dcBlockIn);
+    st.dcBlockIn = clipped;
+    st.dcBlockOut = dcOut;
+
+    return dcOut * 0.92f;
+}
+
+// Ecualizador parametrico de 3 bandas (Bass, Mid, Treble)
 inline float aplicarEQ(float muestra, EQEstados& estados, const EQCoefs& coefs) {
     float y = aplicarBiquad(muestra, estados.bass, coefs.bass);
     y = aplicarBiquad(y, estados.mid, coefs.mid);
@@ -308,98 +171,112 @@ inline float aplicarEQ(float muestra, EQEstados& estados, const EQCoefs& coefs) 
     return y;
 }
 
-inline float aplicarOverdrive(float muestra, float drive, bool odActivo) {
-    if (!odActivo) return muestra;
-    drive = std::clamp(drive, OD_DIAL_MIN, OD_DIAL_MAX);
-    // Clipping asimétrico suave (simula diodos de silicio/válvula) + compensación de nivel
-    const float excitada = muestra * drive;
-    const float saturada = (excitada >= 0.0f)
-        ? std::tanh(excitada)
-        : 0.85f * std::tanh(excitada * 1.15f);
-    return saturada * 0.45f;
+// Fase 6/7: CabSim compartido de gabinete 4x12 aplicado a toda la cadena
+inline float aplicarCabSim(float muestra, CabSimEstados& st, const CabSimCoefs& c) {
+    float y = aplicarBiquad(muestra, st.hpSub, c.hpSub);
+    y = aplicarBiquad(y, st.resCaja, c.resCaja);
+    y = aplicarBiquad(y, st.scoopMedios, c.scoopMedios);
+    y = aplicarBiquad(y, st.presenciaCono, c.presenciaCono);
+    y = aplicarBiquad(y, st.rolloffCono, c.rolloffCono);
+    return y;
 }
 
+// Oscilador de baja frecuencia senoidal para modulacion del chorus
 inline float lfoChorus(float& faseLFO, float rate, float sampleRate) {
     faseLFO += (2.0f * static_cast<float>(PI) * rate) / sampleRate;
-    faseLFO = std::fmod(faseLFO, 2.0f * static_cast<float>(PI));
+    if (faseLFO >= 2.0f * static_cast<float>(PI)) {
+        faseLFO -= 2.0f * static_cast<float>(PI);
+    }
     return std::sin(faseLFO);
 }
 
+// Lectura con interpolacion lineal en el buffer circular del chorus
 inline float leerDelayChorus(const float* buffer, int size, float posicion) {
-    const float posicionNormalizada = std::fmod(std::max(0.0f, posicion), static_cast<float>(size));
-    const int idx0 = static_cast<int>(posicionNormalizada);
+    while (posicion < 0.0f) posicion += static_cast<float>(size);
+    while (posicion >= static_cast<float>(size)) posicion -= static_cast<float>(size);
+
+    const int idx0 = static_cast<int>(posicion);
     const int idx1 = (idx0 + 1) % size;
-    const float frac = posicionNormalizada - static_cast<float>(idx0);
+    const float frac = posicion - static_cast<float>(idx0);
     return buffer[idx0] * (1.0f - frac) + buffer[idx1] * frac;
 }
 
+// Inserta una nueva muestra en el buffer circular del chorus
 inline void guardarBufferChorus(float* buffer, int& writeIndex, float muestra) {
     buffer[writeIndex] = muestra;
     writeIndex = (writeIndex + 1) % CHORUS_BUFFER_SIZE;
 }
 
-inline float aplicarChorus(
+// Analog Chorus estilo BBD con mezcla 65% seca y 35% humeda filtrada
+inline float aplicarAnalogChorus(
     float muestra,
     float* bufferDelay,
     int& writeIndex,
     float& faseLFO,
+    float& filtroBBD,
     float sampleRate,
     float rate,
     float depth
 ) {
-    guardarBufferChorus(bufferDelay, writeIndex, muestra);
+    filtroBBD += 0.32f * (muestra - filtroBBD);
+    guardarBufferChorus(bufferDelay, writeIndex, filtroBBD);
+
     const float lfo = lfoChorus(faseLFO, rate, sampleRate);
     depth = std::clamp(depth, 0.0f, 1.0f);
     const float delaySamples = (CHORUS_DELAY_BASE + CHORUS_DELAY_MOD * depth * lfo) * sampleRate;
 
-    float readPos = static_cast<float>(writeIndex) - delaySamples;
-    while (readPos < 0.0f) readPos += CHORUS_BUFFER_SIZE;
-    while (readPos >= CHORUS_BUFFER_SIZE) readPos -= CHORUS_BUFFER_SIZE;
-
+    const float readPos = static_cast<float>(writeIndex) - delaySamples;
     const float retrasada = leerDelayChorus(bufferDelay, CHORUS_BUFFER_SIZE, readPos);
-    return (muestra + retrasada) * 0.5f;
+
+    return muestra * 0.65f + retrasada * 0.35f;
 }
 
+// Limitador suave final para evitar clipping  duro en la tarjeta de sonido
 inline float limitarSeñalFinal(float muestra) {
     return std::tanh(muestra / LIMITADOR_UMBRAL) * LIMITADOR_UMBRAL;
 }
 
-// ============================================================
-// CLASE AUDIOPLAYER
-// ============================================================
-
 class AudioPlayer {
 private:
     HWAVEOUT hWaveOut = nullptr;
-    std::vector<int16_t> bufferPCM;
     std::vector<Nota> notasPista;
 
+    // Estados DSP persistentes entre bloques de reproduccion
+    OverdriveEstado overdriveEstado{};
     EQEstados eqEstados{};
     EQCoefs eqCoefs{};
+    CabSimEstados cabEstados{};
+    CabSimCoefs cabCoefs{};
+
     float bufferChorus[CHORUS_BUFFER_SIZE]{};
     int writeIndexChorus = 0;
     float faseLFO = 0.0f;
+    float filtroBBDChorus = 0.0f;
 
+    // Sincronizacion del hilo de audio con la interfaz Qt
     std::atomic<bool> reproduciendo{false};
     std::atomic<bool> pausado{false};
     std::atomic<float> tiempoActual{0.0f};
     std::atomic<float> paramSeek{-1.0f};
     std::thread hiloAudio;
 
-    // Controles de la interfaz
+    // Parametros atomicos modificables en tiempo real desde la UI
+    std::atomic<int> paramSintetizador{static_cast<int>(TipoSintetizador::KARPLUS_STRONG)};
+    std::atomic<int> paramTipoPastilla{static_cast<int>(TipoPastilla::SINGLE_COIL)};
     std::atomic<float> paramBass{EQ_GAIN_NEUTRO};
     std::atomic<float> paramMid{EQ_GAIN_NEUTRO};
     std::atomic<float> paramTreble{EQ_GAIN_NEUTRO};
-    std::atomic<float> paramGain{0.5f};       // Volumen de salida, independiente del drive
-    std::atomic<float> paramODDrive{1.0f};    // Intensidad de saturación
-    std::atomic<float> paramCRate{1.0f};
-    std::atomic<float> paramCDepth{0.5f};
+    std::atomic<float> paramOutputLevel{0.90f};
+    std::atomic<float> paramGainDial{1.0f};
+    std::atomic<float> paramCRate{0.8f};
+    std::atomic<float> paramCDepth{0.45f};
     std::atomic<bool> odActivo{false};
     std::atomic<bool> chorusActivo{true};
-    std::atomic<int> paramTipoPastilla{static_cast<int>(TipoPastilla::SINGLE_COIL)};
 
     void bucleReproduccion();
     void actualizarCoefsEQ();
+    void inicializarCoefsCabSim();
+    void resetearEstadosDSP();
 
 public:
     AudioPlayer();
@@ -415,16 +292,17 @@ public:
     inline bool estaReproduciendo() const { return reproduciendo.load() && !pausado.load(); }
     inline float obtenerTiempoActual() const { return tiempoActual.load(); }
 
+    inline void setSintetizador(TipoSintetizador tipo) { paramSintetizador.store(static_cast<int>(tipo)); }
+    inline void setTipoPastilla(TipoPastilla tipo) { paramTipoPastilla.store(static_cast<int>(tipo)); }
     inline void setBass(float v) { paramBass.store(std::clamp(v, EQ_GAIN_MIN, EQ_GAIN_MAX)); }
     inline void setMid(float v) { paramMid.store(std::clamp(v, EQ_GAIN_MIN, EQ_GAIN_MAX)); }
     inline void setTreble(float v) { paramTreble.store(std::clamp(v, EQ_GAIN_MIN, EQ_GAIN_MAX)); }
-    inline void setGain(float v) { paramGain.store(std::clamp(v, 0.0f, 2.0f)); }
-    inline void setODDrive(float v) { paramODDrive.store(std::clamp(v, OD_DIAL_MIN, OD_DIAL_MAX)); }
+    inline void setGain(float v) { paramOutputLevel.store(std::clamp(v, 0.0f, 2.0f)); }
+    inline void setODDrive(float v) { paramGainDial.store(std::clamp(v, GAIN_DIAL_MIN, GAIN_DIAL_MAX)); }
     inline void setCRate(float v) { paramCRate.store(std::clamp(v, CHORUS_RATE_MIN, CHORUS_RATE_MAX)); }
     inline void setCDepth(float v) { paramCDepth.store(std::clamp(v, 0.0f, 1.0f)); }
     inline void setODActive(bool activo) { odActivo.store(activo); }
     inline void setChorusActive(bool activo) { chorusActivo.store(activo); }
-    inline void setTipoPastilla(TipoPastilla tipo) { paramTipoPastilla.store(static_cast<int>(tipo)); }
 };
 
 #endif // AUDIO_PLAYER_H

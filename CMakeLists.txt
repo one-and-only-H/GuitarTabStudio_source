@@ -24,6 +24,9 @@ set(PROJECT_SOURCES
         acordes.cpp
         audio_player.h
         audio_player.cpp
+        sintetizador.h
+        sintetizador_aditivo.h
+        karplus_strong.h
         csv_parser.h
         csv_parser.cpp
         tab_generator.h

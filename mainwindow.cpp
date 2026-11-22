@@ -13,6 +13,7 @@
 #include <QProcess>
 #include <QScrollBar>
 #include <algorithm>
+#include <cmath>
 
 namespace {
 
@@ -49,7 +50,7 @@ MainWindow::MainWindow(QWidget *parent)
     configurarVisorYScroll();
     configurarControlesDSP();
 
-    // --- Bloque 1: Archivos ---
+    // Bloque 1: Archivos
     connect(ui->Abrir_button, &QPushButton::clicked,
             this, &MainWindow::onAbrirCancion);
     connect(ui->Exportar_button, &QPushButton::clicked,
@@ -57,7 +58,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     ui->Exportar_button->setEnabled(false);
 
-    // --- Bloque 2: Transporte de Audio ---
+    // Bloque 2: Transporte de Audio
     connect(ui->Play_button, &QPushButton::clicked,
             this, &MainWindow::onPlayClicked);
     connect(ui->Pause_button, &QPushButton::clicked,
@@ -104,6 +105,7 @@ void MainWindow::configurarVisorYScroll()
 
 void MainWindow::configurarControlesDSP()
 {
+    ui->KS_select->setChecked(true);
     ui->Single_Coil_select->setChecked(true);
 
     for (QDial *dial : {ui->Gain_dial, ui->Rate_dial, ui->Width_dial}) {
@@ -111,27 +113,32 @@ void MainWindow::configurarControlesDSP()
         dial->setWrapping(false);
         dial->setNotchesVisible(true);
     }
-    ui->Gain_dial->setValue(45);
+    // Gain_dial inicia en 0 (limpio 1x) y sube exponencialmente hasta 60x
+    ui->Gain_dial->setValue(0);
     ui->Rate_dial->setValue(20);
-    ui->Width_dial->setValue(50);
+    ui->Width_dial->setValue(45);
 
     for (QSlider *slider : {ui->Bass_slider, ui->Mid_slider, ui->Treble_slider}) {
         slider->setRange(0, 100);
         slider->setValue(50);
     }
 
+    // Gain_dial siempre habilitado mientras el checkbox OD suma +40x fijos
     ui->checkBox->setChecked(false);
     ui->Chorus_check->setChecked(true);
-    ui->Gain_dial->setEnabled(false);
+    ui->Gain_dial->setEnabled(true);
     ui->Rate_dial->setEnabled(true);
     ui->Width_dial->setEnabled(true);
 
-    connect(ui->checkBox, &QCheckBox::toggled,
-            ui->Gain_dial, &QDial::setEnabled);
     connect(ui->Chorus_check, &QCheckBox::toggled,
             ui->Rate_dial, &QDial::setEnabled);
     connect(ui->Chorus_check, &QCheckBox::toggled,
             ui->Width_dial, &QDial::setEnabled);
+
+    connect(ui->KS_select, &QRadioButton::toggled,
+            this, &MainWindow::onActualizarParametrosDSP);
+    connect(ui->Aditiva_select, &QRadioButton::toggled,
+            this, &MainWindow::onActualizarParametrosDSP);
 
     connect(ui->Single_Coil_select, &QRadioButton::toggled,
             this, &MainWindow::onActualizarParametrosDSP);
@@ -156,20 +163,29 @@ void MainWindow::configurarControlesDSP()
     connect(ui->Treble_slider, &QSlider::valueChanged,
             this, &MainWindow::onActualizarParametrosDSP);
 
-    player_.setGain(0.85f);
+    player_.setGain(0.90f);
     onActualizarParametrosDSP();
 }
 
 void MainWindow::onActualizarParametrosDSP()
 {
+    player_.setSintetizador(
+        ui->Aditiva_select->isChecked()
+            ? TipoSintetizador::ADITIVO
+            : TipoSintetizador::KARPLUS_STRONG
+    );
+
     player_.setTipoPastilla(
         ui->Humbucker_select->isChecked()
             ? TipoPastilla::HUMBUCKER
             : TipoPastilla::SINGLE_COIL
     );
 
+    // Gain_dial aporta de 1x a 60x y el boton OD suma +40x hasta un tope de 100x
     player_.setODActive(ui->checkBox->isChecked());
-    player_.setODDrive(mapearRango(ui->Gain_dial->value(), 0, 100, OD_DIAL_MIN, OD_DIAL_MAX));
+    const float normGain = std::clamp(ui->Gain_dial->value() / 100.0f, 0.0f, 1.0f);
+    const float gainDial = GAIN_DIAL_MIN * std::pow(GAIN_DIAL_MAX / GAIN_DIAL_MIN, normGain);
+    player_.setODDrive(gainDial);
 
     auto mapearEQ = [](int val) -> float {
         if (val <= 50) {
@@ -297,7 +313,6 @@ void MainWindow::cargarYMapearCSV(const QString &rutaCSV)
             duracionTotalCancion_ = std::max(duracionTotalCancion_, n.timestamp + n.duracion);
         }
 
-        // 1. Mapeo a tablatura
         ultimoResultado_ = Mapper::mapear(notasActuales_);
 
         TabGenerator::ConfigTab cfg;
@@ -306,7 +321,7 @@ void MainWindow::cargarYMapearCSV(const QString &rutaCSV)
         const std::string tab = TabGenerator::generarTablatura(ultimoResultado_, cfg);
         tablaturaActual_ = QString::fromStdString(tab);
 
-        // Construir tabla no-lineal (tiempo -> caracteres) respetando silencios | xN |
+        // Construccion de tabla tiempo <-> caracteres respetando bloques de silencio
         mapaTiempoScroll_.clear();
         auto cols = TabGenerator::construirColumnas(ultimoResultado_, cfg);
         double charAcum = 0.0;
@@ -322,7 +337,6 @@ void MainWindow::cargarYMapearCSV(const QString &rutaCSV)
         ui->Tab_scrollbar->setValue(0);
         ui->Exportar_button->setEnabled(true);
 
-        // 2. Preparar AudioPlayer
         if (!player_.prepararPista(notasActuales_, SAMPLE_RATE)) {
             QMessageBox::warning(this, "Audio", "No se pudo preparar la pista de audio.");
         }
