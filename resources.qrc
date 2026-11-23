@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file alias="GuitarTabStudio_logo.png">
+            assets/icons/GuitarTabStudio_logo.png
+        </file>
+    </qresource>
+</RCC>
