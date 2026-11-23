@@ -12,6 +12,8 @@
 #include <QMessageBox>
 #include <QProcess>
 #include <QScrollBar>
+#include <QRegularExpression>
+#include <QTextStream>
 #include <algorithm>
 #include <cmath>
 
@@ -241,53 +243,72 @@ void MainWindow::onAbrirCancion()
 
         QProcess proceso;
         proceso.setWorkingDirectory(raiz);
-        proceso.start("python", QStringList() << scriptPython << rutaSeleccionada);
+        proceso.start("python", QStringList() << "-u" << scriptPython << rutaSeleccionada);
 
         if (!proceso.waitForFinished(15000) || proceso.exitCode() != 0) {
-            const QString err = QString::fromLocal8Bit(proceso.readAllStandardError());
+            const QString err = QString::fromUtf8(proceso.readAllStandardError());
+            const QString out = QString::fromUtf8(proceso.readAllStandardOutput());
             ui->statusbar->clearMessage();
             QMessageBox::critical(
                 this,
                 "Error al convertir MIDI",
-                "No se pudo ejecutar midi2csv.py:\n" + err
+                "No se pudo ejecutar midi2csv.py:\n" + (err.isEmpty() ? out : err)
             );
             return;
         }
 
-        QDir dirSongs(carpetaSongs);
-        const QStringList filtros = { info.completeBaseName() + "_*.csv" };
-        const QStringList csvGenerados = dirSongs.entryList(filtros, QDir::Files, QDir::Name);
+        const QString salida = QString::fromUtf8(proceso.readAllStandardOutput());
+        const QStringList lineas = salida.split(QRegularExpression("[\r\n]+"), Qt::SkipEmptyParts);
 
-        if (csvGenerados.isEmpty()) {
+        QStringList rutasCsvGenerados;
+        for (const QString &linea : lineas) {
+            if (linea.startsWith("CSV_OUT:")) {
+                const QString ruta = linea.mid(8).trimmed();
+                if (!ruta.isEmpty()) {
+                    rutasCsvGenerados.append(QDir::fromNativeSeparators(ruta));
+                }
+            }
+        }
+
+        if (rutasCsvGenerados.isEmpty()) {
             ui->statusbar->clearMessage();
             QMessageBox::warning(
                 this,
                 "Sin pistas",
-                "El MIDI se procesó pero no se encontraron archivos CSV en songs/."
+                "El MIDI no contiene pistas de guitarra válidas (rango E2-E6)."
             );
             return;
         }
 
-        QString csvElegido = csvGenerados.first();
-        if (csvGenerados.size() > 1) {
+        QString rutaCsvElegida = rutasCsvGenerados.first();
+        if (rutasCsvGenerados.size() > 1) {
+            QStringList nombresMostrar;
+            for (const QString &r : rutasCsvGenerados) {
+                nombresMostrar.append(QFileInfo(r).fileName());
+            }
+
             bool ok = false;
-            csvElegido = QInputDialog::getItem(
+            const QString elegido = QInputDialog::getItem(
                 this,
                 "Seleccionar pista",
                 "El MIDI tiene varias pistas. Elige la de guitarra:",
-                csvGenerados,
+                nombresMostrar,
                 0,
                 false,
                 &ok
             );
-            if (!ok || csvElegido.isEmpty()) {
+            if (!ok || elegido.isEmpty()) {
                 ui->statusbar->clearMessage();
                 return;
+            }
+            const int idx = nombresMostrar.indexOf(elegido);
+            if (idx >= 0) {
+                rutaCsvElegida = rutasCsvGenerados.at(idx);
             }
         }
 
         rutaArchivoActual_ = rutaSeleccionada;
-        cargarYMapearCSV(dirSongs.absoluteFilePath(csvElegido));
+        cargarYMapearCSV(rutaCsvElegida);
         return;
     }
 
@@ -298,9 +319,17 @@ void MainWindow::onAbrirCancion()
 void MainWindow::cargarYMapearCSV(const QString &rutaCSV)
 {
     try {
+        if (!QFileInfo::exists(rutaCSV)) {
+            ui->statusbar->clearMessage();
+            QMessageBox::critical(this, "Archivo no encontrado", "No existe el archivo:\n" + rutaCSV);
+            return;
+        }
+
         ui->statusbar->showMessage("Mapeando notas y preparando sintetizador...");
 
-        std::vector<Nota> notas = parsearCSV(rutaCSV.toStdString());
+        // toLocal8Bit() evita que std::ifstream falle en Windows con rutas que tengan tildes o ñ
+        const std::string rutaNativa(rutaCSV.toLocal8Bit().constData());
+        std::vector<Nota> notas = parsearCSV(rutaNativa);
         if (notas.empty()) {
             ui->statusbar->clearMessage();
             QMessageBox::warning(this, "CSV vacío", "El archivo no contiene notas válidas.");
@@ -317,11 +346,34 @@ void MainWindow::cargarYMapearCSV(const QString &rutaCSV)
 
         TabGenerator::ConfigTab cfg;
         cfg.ancho_maximo_linea = 10000;
+        cfg.ancho_compas = 24;
+
+        // Cargar BPM y metrica de compas desde el archivo .meta si existe
+        QFile archivoMeta(rutaCSV + ".meta");
+        if (archivoMeta.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream in(&archivoMeta);
+            while (!in.atEnd()) {
+                const QString linea = in.readLine().trimmed();
+                if (linea.startsWith("bpm=")) {
+                    bool ok = false;
+                    const double val = linea.mid(4).toDouble(&ok);
+                    if (ok && val > 0.0) cfg.bpm = val;
+                } else if (linea.startsWith("numerador=")) {
+                    bool ok = false;
+                    const int val = linea.mid(10).toInt(&ok);
+                    if (ok && val > 0) cfg.numerador_compas = val;
+                } else if (linea.startsWith("denominador=")) {
+                    bool ok = false;
+                    const int val = linea.mid(12).toInt(&ok);
+                    if (ok && val > 0) cfg.denominador_compas = val;
+                }
+            }
+        }
 
         const std::string tab = TabGenerator::generarTablatura(ultimoResultado_, cfg);
         tablaturaActual_ = QString::fromStdString(tab);
 
-        // Construccion de tabla tiempo <-> caracteres respetando bloques de silencio
+        // Construccion de tabla tiempo <-> caracteres por compases
         mapaTiempoScroll_.clear();
         auto cols = TabGenerator::construirColumnas(ultimoResultado_, cfg);
         double charAcum = 0.0;
@@ -348,9 +400,12 @@ void MainWindow::cargarYMapearCSV(const QString &rutaCSV)
         const QFileInfo info(rutaCSV);
         setWindowTitle("GuitarTabStudio 1.0 — " + info.fileName());
         ui->statusbar->showMessage(
-            QString("Listo: %1 eventos | %2 notas | Duración: %3 s")
+            QString("Listo: %1 eventos | %2 notas | %3/%4 @ %5 BPM | Duración: %6 s")
                 .arg(ultimoResultado_.eventos.size())
                 .arg(ultimoResultado_.notas.size())
+                .arg(cfg.numerador_compas)
+                .arg(cfg.denominador_compas)
+                .arg(cfg.bpm, 0, 'f', 0)
                 .arg(duracionTotalCancion_, 0, 'f', 1),
             5000
         );
