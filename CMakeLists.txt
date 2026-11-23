@@ -41,6 +41,7 @@ set(PROJECT_SOURCES
         mapper/formas_conocidas.h
         mapper/merger.h
         ${TS_FILES}
+        resources.qrc
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
