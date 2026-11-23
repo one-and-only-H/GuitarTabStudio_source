@@ -23,18 +23,20 @@ enum class Technique {
 };
 
 // Representación general de una nota musical
+/* Almacena su informacion MIDI, duracion y posicion temporal
+intensidad, tecnica de interpretación y función musical */
 struct Nota {
     std::string nota;
     int octava = 4;
     int pitch = -1;
 
-    double duracion = 0.0;
+    double duracion = 0.0; 
     double timestamp = 0.0;
 
     int velocidad = 0;
 
     std::string tecnica;
-    Technique tech = Technique::None;
+    Technique tech = Technique::None; // Almacena tecnica
 
     Role role = Role::ACORDE;
 
@@ -42,6 +44,8 @@ struct Nota {
 };
 
 // Conjunto de notas pertenecientes a un evento armónico (osea, al mismo tiempo salen las notas)
+// Se utiliza para representar eventos simultáneos y facilitar
+// el reconocimiento de acordes
 struct EventoArmonico {
     double timestamp = 0.0;
     double duracion = 0.0;
