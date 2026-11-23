@@ -16,6 +16,7 @@
 #include <QTextStream>
 #include <algorithm>
 #include <cmath>
+#include <QIcon>
 
 namespace {
 
@@ -49,6 +50,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
     setWindowTitle("GuitarTabStudio 1.0");
+    setWindowIcon(QIcon(":/icons/GuitarTabStudio_logo(1).png"));
     configurarVisorYScroll();
     configurarControlesDSP();
 
