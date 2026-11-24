@@ -1,3 +1,22 @@
+/*
+ * ARCHIVO: mainwindow.h / mainwindow.cpp
+ *
+ * CONTEXTO DE LO QUE YA SE TIENE:
+ * Todos los modulos del backend (csv_parser, mapper, tab_generator y
+ * audio_player), el conversor MIDI y el diseno visual en mainwindow.ui ya
+ * estan listos para integrarse.
+ *
+ * HERRAMIENTAS A USAR:
+ * Framework Qt 6 (QMainWindow, QProcess, QTimer, QFileDialog, QMessageBox,
+ * QInputDialog, QIcon, QScrollBar) y las cabeceras de todos los modulos del
+ * proyecto.
+ *
+ * QUE DEBE HACER ESTE ARCHIVO:
+ * Gestionar la interaccion con el usuario: ejecutar midi2csv.exe (o python)
+ * al abrir un archivo MIDI, cargar la tablatura en el visor, sincronizar el
+ * avance automatico de la barra horizontal y el seek manual con el audio,
+ * actualizar los efectos DSP en vivo y manejar la exportacion a .txt.
+ */
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
@@ -18,7 +37,8 @@
 #include <QTextStream>
 #include <algorithm>
 #include <cmath>
-
+//salve deepseek y salve gemini
+//gpt me ha decepcionado
 namespace {
 
 QString encontrarRaizProyecto()
@@ -333,7 +353,7 @@ void MainWindow::onAbrirCancion()
     rutaArchivoActual_ = rutaSeleccionada;
     cargarYMapearCSV(rutaSeleccionada);
 }
-
+//while they out partying btw
 void MainWindow::cargarYMapearCSV(const QString &rutaCSV)
 {
     try {

@@ -1,4 +1,19 @@
-
+/*
+ * ARCHIVO: analizador_patrones.h 
+ *
+ * CONTEXTO DE LO QUE YA SE TIENE:
+ * Ya se cuenta con la linea de tiempo de notas y el contexto armonico de la
+ * pieza entregado por analizador_contextual.
+ *
+ * HERRAMIENTAS A USAR:
+ * "formas_conocidas.h", <vector>, <algorithm> y <cmath>.
+ *
+ * QUE DEBE HACER ESTE ARCHIVO:
+ * Detectar pasajes repetitivos en la cancion (riffs, arpegios, intros o
+ * progresiones ciclicas) para que el mapper mantenga consistencia y
+ * reutilice las mismas posiciones en el diapason cuando una frase vuelve a
+ * aparecer, evitando que un mismo riff se digite distinto en cada vuelta.
+ */
 #ifndef ANALIZADOR_PATRONES_H
 #define ANALIZADOR_PATRONES_H
 
@@ -47,10 +62,10 @@ struct PatronDetectado {
 
     double confianza = 0.0;
 
-    // Índices de los instantes del timeline que participan.
+    // Índices de los instantes del timeline que participan
     std::vector<std::size_t> indicesTimeline;
 
-    // Pitches MIDI detectados.
+    // Pitches MIDI detectados
     std::vector<int> pitches;
 
     std::vector<PosicionGuitarra> posicionesForma;
@@ -122,7 +137,7 @@ inline std::vector<PlantillaArpegio> generarPlantillas(
     std::vector<PlantillaArpegio> plantillas;
 
     const auto& formas = obtenerFormasConocidas();
-
+        //auto me ha ahorrado unos dolores de cabeza...
     for (const auto& forma : formas) {
 
         if (forma.trastes.size() != config.afinacion.size())
@@ -574,7 +589,7 @@ inline std::vector<PatronDetectado> detectar(
             return a.pitches.size() > b.pitches.size();
         }
     );
-    
+    //ya no mas std::
     std::vector<PatronDetectado> unicos;
     for (auto& p : resultados) {
         bool duplicado = false;

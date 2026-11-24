@@ -1,4 +1,19 @@
-
+/*
+ * ARCHIVO: tipos_mapper.h
+ *
+ * CONTEXTO DE LO QUE YA SE TIENE:
+ * Ya estan definidos los tipos basicos del dominio (Nota y EventoArmonico)
+ * dentro de tipos.h.
+ *
+ * HERRAMIENTAS A USAR:
+ * "tipos.h" y contenedores estandar de C++ (<vector>, <string>, <array>).
+ *
+ * QUE DEBE HACER ESTE ARCHIVO:
+ * Definir las estructuras internas que necesita el motor de digitacion:
+ * posiciones fisicas en el diapason (cuerda y traste), candidatos de acorde,
+ * instantes discretos de la linea de tiempo (notas atacadas vs. sostenidas),
+ * pesos de penalizacion ergonomica y la estructura ResultadoMapeo final.
+ */
 #ifndef TIPOS_MAPPER_H
 #define TIPOS_MAPPER_H
 

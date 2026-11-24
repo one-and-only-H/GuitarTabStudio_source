@@ -23,6 +23,9 @@ struct FormaConocida {
 // ------------------------------------------------------------
 // BIBLIOTECA DE FORMAS CONOCIDAS
 // ------------------------------------------------------------
+
+//un poquito más y le metemos algebra lineal
+
 inline const std::vector<FormaConocida>& obtenerFormasConocidas() {
     static const std::vector<FormaConocida> formas = {
         // ====================================================
@@ -42,7 +45,7 @@ inline const std::vector<FormaConocida>& obtenerFormasConocidas() {
         // ====================================================
         // MENORES
         // ====================================================
-        {"Am",    9, CalidadAcorde::MENOR, {0, 1, 2, 2, 0, -1}},
+        {"Am",    9, CalidadAcorde::MENOR, {0, 1, 2, 2, 0, -1}}, //drake's favorite
         {"Em",    4, CalidadAcorde::MENOR, {0, 0, 0, 2, 2, 0}},
         {"Dm",    2, CalidadAcorde::MENOR, {1, 3, 2, 0, -1, -1}},
         {"Am_barra", 9, CalidadAcorde::MENOR, {5, 5, 5, 7, 7, 5}},
@@ -112,6 +115,8 @@ inline const std::vector<FormaConocida>& obtenerFormasConocidas() {
 
         //novena añadida
         {"Cadd9", 0, CalidadAcorde::MAYOR, {3, 3, 0, 2, 3, -1}}
+        //y va a tocar seguir añadiendo más, pero con eso cubre ya la mayoría de canciones
+        
 
     };
 

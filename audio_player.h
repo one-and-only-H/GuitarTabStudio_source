@@ -1,3 +1,26 @@
+/*
+ * ARCHIVO: audio_player.h / audio_player.cpp
+ *
+ * CONTEXTO DE LO QUE YA SE TIENE:
+ * Se dispone del std::vector<Nota> de la cancion y de los parametros en
+ * tiempo real configurados por el usuario (sintetizador, pastilla, EQ,
+ * overdrive y chorus).
+ *
+ * HERRAMIENTAS A USAR:
+ * "tipos.h", API multimedia de Windows (<windows.h>, <mmsystem.h> con
+ * winmm.lib / waveOut), hilos y atomicos (<thread>, <atomic>), arreglos fijos
+ * (<array>) y <cmath> sin asignacion dinamica en el bucle de audio.
+ *
+ * QUE DEBE HACER ESTE ARCHIVO:
+ * Sintetizar el audio muestra por muestra a 44.1 kHz en un hilo separado
+ * usando Karplus-Strong o sintesis aditiva (7 armonicos con ADSR), aplicar
+ * simulacion de pastillas (Single Coil / Humbucker), filtros Biquad de 3
+ * bandas, Overdrive (tanh) y Chorus, y controlar play, pause, stop y seek.
+ */
+
+
+
+
 #ifndef AUDIO_PLAYER_H
 #define AUDIO_PLAYER_H
 
@@ -74,6 +97,10 @@ struct EQEstados {
     BiquadEstado treble;
 };
 
+//====================
+//y de nuevo, con los "===".
+//SIMULACIÓN DE SONIDO REALISTA (KARPLUS STRONG)
+
 // Banco de 5 filtros Biquad en cascada que modelan un gabinete 4x12 Celestion V30
 struct CabSimCoefs {
     BiquadCoef hpSub;         // Corte subsonico en 75 Hz para limpiar graves sueltos
@@ -101,6 +128,7 @@ struct OverdriveEstado {
     float dcBlockOut = 0.0f;
 };
 
+//======================
 // Convierte muestra flotante [-1, 1] a entero PCM de 16 bits con saturacion segura
 inline int16_t convertirPCM(float muestra) {
     muestra = std::clamp(muestra, -1.0f, 1.0f);
@@ -236,6 +264,8 @@ inline float limitarSeñalFinal(float muestra) {
     return std::tanh(muestra / LIMITADOR_UMBRAL) * LIMITADOR_UMBRAL;
 }
 
+
+//TODOS esos meses aprendiendo de audio por fin sirven pa algo
 class AudioPlayer {
 private:
     HWAVEOUT hWaveOut = nullptr;

@@ -1,3 +1,28 @@
+/*
+ * ARCHIVO: karplus_strong.h
+ *
+ * CONTEXTO DE LO QUE YA SE TIENE:
+ * Ya existe el motor de audio principal (audio_player.h / .cpp) que reproduce
+ * muestras a 44.1 kHz por waveOut con sintesis aditiva, pero hace falta una
+ * segunda opcion de sintesis fisica para el selector de la interfaz.
+ *
+ * HERRAMIENTAS A USAR:
+ * C++17 (<vector>, <array>, <cmath>, <random>, <algorithm>), funciones inline
+ * y una linea de retardo (buffer circular) con filtro pasa-bajos simple.
+ *
+ * QUE DEBE HACER ESTE ARCHIVO:
+ * Implementar el algoritmo de Karplus-Strong para simular el sonido de una
+ * cuerda pulsada: llenar un buffer del largo del periodo fundamental
+ * (sampleRate / frecuencia) con ruido blanco filtrado (simulando la pua) y
+ * retroalimentar las muestras promediando valores vecinos con un factor de
+ * decaimiento para imitar la perdida de energia natural de la cuerda.
+ */
+/*
+en algun momento esto tendrá un rework 
+y algun día entenderé mejor esta parte  
+
+*/
+
 #ifndef KARPLUS_STRONG_H
 #define KARPLUS_STRONG_H
 

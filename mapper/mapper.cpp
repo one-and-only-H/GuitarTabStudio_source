@@ -1,3 +1,21 @@
+/*
+ * ARCHIVO: mapper/mapper.h / mapper/mapper.cpp
+ *
+ * CONTEXTO DE LO QUE YA SE TIENE:
+ * Ya estan implementados y probados por separado los modulos de analisis
+ * armonico (acordes), generacion de posturas (candidatos) y optimizacion de
+ * trayectoria (viterbi).
+ *
+ * HERRAMIENTAS A USAR:
+ * "tipos.h", "tipos_mapper.h", "acordes.h", "candidatos.h", "viterbi.h",
+ * <vector> y <algorithm>.
+ *
+ * QUE DEBE HACER ESTE ARCHIVO:
+ * Orquestar todo el proceso de digitacion en cuatro fases: construir el
+ * contexto armonico de la pista, dividir la linea de tiempo en notas
+ * atacadas y sostenidas, ejecutar Viterbi para melodia y armonia, y fusionar
+ * ambas capas resolviendo colisiones cuando dos notas piden la misma cuerda.
+ */
 #include "mapper.h"
 #include "candidatos.h"
 #include "viterbi.h"
@@ -185,7 +203,7 @@ ResultadoMapeo mapear(const std::vector<Nota>& notasRaw) {
                       << ", T" << p.traste
                       << ", P" << p.pitch << "] ";
         }
-
+            // el indentado salva vidas, trust me
         std::cout << '\n';
     }
 

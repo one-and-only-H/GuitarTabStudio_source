@@ -1,3 +1,21 @@
+/*
+ * ARCHIVO: tipos.h
+ *
+ * CONTEXTO DE LO QUE YA SE TIENE:
+ * Punto de partida del proyecto. Todavia no existen estructuras compartidas
+ * entre el lector de archivos, el motor de mapeo, el generador de tablatura
+ * y el sintetizador de audio.
+ *
+ * HERRAMIENTAS A USAR:
+ * C++17 basico (<string>, <vector>, <cstdint>). Solo structs, enums y
+ * constantes globales para evitar dependencias circulares.
+ *
+ * QUE DEBE HACER ESTE ARCHIVO:
+ * Definir los tipos de datos fundamentales del dominio: la estructura Nota
+ * (pitch, nombre, octava, timestamp, duracion, velocidad, tecnica), la
+ * estructura EventoArmonico para notas simultaneas y las constantes de
+ * afinacion estandar de la guitarra (E2 A2 D3 G3 B3 E4).
+ */
 #ifndef TIPOS_H
 #define TIPOS_H
 

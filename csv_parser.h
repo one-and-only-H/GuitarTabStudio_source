@@ -8,6 +8,10 @@
 #include <stdexcept>
 #include <algorithm>
 
+//te vas a herniar de tanto inline
+// el documento decia "modularizar"... 
+
+
 // 1. PRIMERO: La función de limpieza (para que las demás la vean)
 inline std::string limpiarCampo(const std::string& s) {
     size_t inicio = s.find_first_not_of(" \t\r\n");
@@ -59,7 +63,7 @@ inline Nota parsearNotaCSV(const std::string& linea) {
 
     std::getline(stream, campo, ',');
     n.role = static_cast<Role>(std::stoi(limpiarCampo(campo)));
-
+            //static cast te amo pero te odio
     std::getline(stream, campo, ',');
     n.parametro = std::stof(limpiarCampo(campo));
 

@@ -1,3 +1,20 @@
+/*
+ * ARCHIVO: motor_armonico.h 
+ *
+ * CONTEXTO DE LO QUE YA SE TIENE:
+ * Ya se identificaron los eventos armonicos y acordes de la cancion, y se
+ * cuenta con el generador de posturas (candidatos.h) y el optimizador de
+ * secuencias (viterbi.h).
+ *
+ * HERRAMIENTAS A USAR:
+ * "tipos_mapper.h", "candidatos.h", "viterbi.h", <vector> y <algorithm>.
+ *
+ * QUE DEBE HACER ESTE ARCHIVO:
+ * Resolver la digitacion de la capa armonica (acordes y rasgueos): filtrar
+ * los candidatos dando prioridad a formas de la biblioteca CAGED (acordes
+ * abiertos y cejillas basicas) y correr Viterbi para elegir la secuencia de
+ * posiciones con transiciones mas comodas entre un acorde y el siguiente.
+ */
 #ifndef MOTOR_ARMONICO_H
 #define MOTOR_ARMONICO_H
 

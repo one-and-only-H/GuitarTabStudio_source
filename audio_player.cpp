@@ -1,3 +1,25 @@
+/*
+ * ARCHIVO: audio_player.h / audio_player.cpp
+ *
+ * CONTEXTO DE LO QUE YA SE TIENE:
+ * Se dispone del std::vector<Nota> de la cancion y de los parametros en
+ * tiempo real configurados por el usuario (sintetizador, pastilla, EQ,
+ * overdrive y chorus).
+ *
+ * HERRAMIENTAS A USAR:
+ * "tipos.h", API multimedia de Windows (<windows.h>, <mmsystem.h> con
+ * winmm.lib / waveOut), hilos y atomicos (<thread>, <atomic>), arreglos fijos
+ * (<array>) y <cmath> sin asignacion dinamica en el bucle de audio.
+ *
+ * QUE DEBE HACER ESTE ARCHIVO:
+ * Sintetizar el audio muestra por muestra a 44.1 kHz en un hilo separado
+ * usando Karplus-Strong o sintesis aditiva (7 armonicos con ADSR), aplicar
+ * simulacion de pastillas (Single Coil / Humbucker), filtros Biquad de 3
+ * bandas, Overdrive (tanh) y Chorus, y controlar play, pause, stop y seek.
+ */
+
+
+
 #include "audio_player.h"
 
 namespace {
@@ -9,7 +31,7 @@ BiquadCoef normalizarCoeficientes(float b0, float b1, float b2,
     return {b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
 }
 
-// Filtro pasa-bajos de 2 polos (Audio EQ Cookbook)
+// Filtro pasa-bajos de 2 polos (de Audio EQ Cookbook)
 BiquadCoef lowPass(float frecuencia, float Q, float sampleRate) {
     const float w0 = 2.0f * static_cast<float>(PI) * frecuencia / sampleRate;
     const float c = std::cos(w0);
@@ -92,6 +114,18 @@ BiquadCoef peakingEQ(float frecuencia, float ganancia, float Q, float sampleRate
 }
 
 // Fabrica polimorfica para instanciar el motor de sintesis activo
+//viste que con palabras bien rebuscadas suena más dificil?
+//ajá pero vas a entregar con eso así y el poco de palabras esas?
+//si
+
+
+
+//y esto de donde?
+//ahi si que la IA ayude, ya todo el mes tirando if else while std:: 
+//no me voy a pelear con la api de windows, tu? 
+//bueno dale pues
+//igual hice bastante de las funciones inline
+//y pq seguimos hablando aqui y no wsp?
 std::unique_ptr<ISintetizador> crearSintetizador(TipoSintetizador tipo, uint32_t sampleRate) {
     if (tipo == TipoSintetizador::ADITIVO) {
         return std::make_unique<SintetizadorAditivo>(sampleRate);

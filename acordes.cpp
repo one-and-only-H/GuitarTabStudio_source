@@ -1,3 +1,23 @@
+/*
+ * ARCHIVO: acordes.h / acordes.cpp
+ *
+ * CONTEXTO DE LO QUE YA SE TIENE:
+ * Ya se dispone del std::vector<Nota> completo cargado en memoria por el
+ * modulo csv_parser.
+ *
+ * HERRAMIENTAS A USAR:
+ * "tipos.h" y operaciones matematicas/arreglos de C++ (<vector>, <string>,
+ * <array>, <cmath>, <algorithm>).
+ *
+ * QUE DEBE HACER ESTE ARCHIVO:
+ * Agrupar notas que suenan dentro de una misma ventana de tiempo en objetos
+ * EventoArmonico, identificar el nombre e inversion del acorde resultante y
+ * estimar la tonalidad global de la cancion usando los perfiles de
+ * Krumhansl-Schmuckler.
+ */
+
+
+ 
 #include "acordes.h"
 
 #include <algorithm>
@@ -416,6 +436,7 @@ Tonalidad detectarTonalidad(
     return resultado;
 }
 
+//estos comentarios de completions de vs code me tienen aburrido
 // Transpone una nota individual.
 Nota transponerNota(
     const Nota& nota,
@@ -435,7 +456,7 @@ Nota transponerNota(
     return resultado;
 }
 
-// Transpone un evento armónico completo.
+// Transpone un evento armónico completo
 EventoArmonico transponerAcorde(
     const EventoArmonico& evento,
     int semitonos

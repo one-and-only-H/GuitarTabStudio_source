@@ -9,6 +9,11 @@
 #include <cstdint>
 #include <vector>
 
+
+// la parte más bonita del codigo
+
+
+
 class SintetizadorAditivo : public ISintetizador {
 private:
     static constexpr int NUM_HARMONICS = 7;
@@ -51,9 +56,10 @@ private:
     TipoPastilla pastilla_ = TipoPastilla::SINGLE_COIL;
     std::vector<VozAditiva> voces_;
 
+    //look up table para que no tenga que hacer el calculo del seno cada sample, 
     static inline float generarOndaLUT(float frecuencia, float& fase, float sr) {
         constexpr int LUT_SIZE = 2048;
-        constexpr float DOS_PI = 2.0f * static_cast<float>(PI_AD);
+        constexpr float DOS_PI = 2.0f * static_cast<float>(PI_AD); 
         static const std::array<float, LUT_SIZE> tablaSeno = []() {
             std::array<float, LUT_SIZE> t{};
             for (int i = 0; i < LUT_SIZE; ++i) {
@@ -95,7 +101,7 @@ private:
         std::copy(r, r + NUM_HARMONICS, perfil.releases);
         return perfil;
     }
-
+    //hell in heaven is the next function
     static inline void reconstruirADSR(EnvolventeADSR& env, float elapsed,
                                        float duracion, float ataque, float decayRate,
                                        float sustain, float release) {
@@ -161,6 +167,8 @@ private:
         }
         return false;
     }
+    //record:  49m en hacer esa
+    
 
 public:
     explicit SintetizadorAditivo(uint32_t sampleRate = 44100)

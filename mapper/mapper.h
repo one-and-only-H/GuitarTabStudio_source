@@ -1,3 +1,22 @@
+/*
+ * ARCHIVO: mapper/mapper.h / mapper/mapper.cpp
+ *
+ * CONTEXTO DE LO QUE YA SE TIENE:
+ * Ya estan implementados y probados por separado los modulos de analisis
+ * armonico (acordes), generacion de posturas (candidatos) y optimizacion de
+ * trayectoria (viterbi).
+ *
+ * HERRAMIENTAS A USAR:
+ * "tipos.h", "tipos_mapper.h", "acordes.h", "candidatos.h", "viterbi.h",
+ * <vector> y <algorithm>.
+ *
+ * QUE DEBE HACER ESTE ARCHIVO:
+ * Orquestar todo el proceso de digitacion en cuatro fases: construir el
+ * contexto armonico de la pista, dividir la linea de tiempo en notas
+ * atacadas y sostenidas, ejecutar Viterbi para melodia y armonia, y fusionar
+ * ambas capas resolviendo colisiones cuando dos notas piden la misma cuerda.
+ */
+
 #ifndef MAPPER_H
 #define MAPPER_H
 
@@ -29,6 +48,7 @@ struct SongContext {
     ContextoTemporal contexto;
 };
 
+//comentarios a lo que de
 // Segmento de tiempo donde el estado (notas/acordes) no cambia.
 struct InstanteTimeline {
     double inicio = 0.0;
@@ -197,19 +217,19 @@ inline std::vector<TabNote> convertirCandidatoATabNotes(
     }
     return res;
 }
-
+//ya se me pegó lo de la IA de poner los "//===="
 // ============================================================
 // 3. DECLARACIONES (lo que va en el .cpp)
 // ============================================================
 
-// Normaliza notas, agrupa acordes, detecta tonalidad y resuelve solapamientos.
+// Normaliza notas, agrupa acordes, detecta tonalidad y resuelve solapamientos
 SongContext construirContexto(const std::vector<Nota>& notasRaw);
 
-// Divide la canción en instantes con notas activas, sostenidas y acorde.
+// Divide la canción en instantes con notas activas, sostenidas y acorde
 std::vector<InstanteTimeline> construirTimeline(const SongContext& ctx);
 
 
-// Orquestador principal.
+// Orquestador principal
 ResultadoMapeo mapear(const std::vector<Nota>& notasRaw);
 
 } // namespace Mapper

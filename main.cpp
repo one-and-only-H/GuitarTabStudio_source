@@ -4,6 +4,8 @@
 // 1 = Ejecuta el test de consola (diagnóstico rápido del pipeline)
 #define MODO_TEST_CONSOLA 0
 // ─────────────────────────────────────────────────────────────
+//integra TODO
+
 
 #if MODO_TEST_CONSOLA
 
@@ -140,8 +142,8 @@ int main(int argc, char* argv[])
 }
 
 #else
-
-// --- MODO VENTANA PRINCIPAL QT ---
+//=======================================
+// ---main build ---
 #include "mainwindow.h"
 
 #include <QApplication>
@@ -171,5 +173,5 @@ int main(int argc, char *argv[])
     w.show();
     return QApplication::exec();
 }
-
+//gracias eventos de Qt
 #endif

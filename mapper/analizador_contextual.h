@@ -1,4 +1,25 @@
-
+/*
+ * ARCHIVO: analizador_contextual.h / analizador_contextual.cpp
+ *
+ * CONTEXTO DE LO QUE YA SE TIENE:
+ * Ya se leyeron las notas desde el CSV (csv_parser) y se agruparon los
+ * eventos simultaneos basicos (acordes), pero falta interpretar el contexto
+ * musical antes de asignar trastes.
+ *
+ * HERRAMIENTAS A USAR:
+ * "tipos.h", <vector>, <algorithm> y <cmath>.
+ *  * tambien su propio tipos_contexto
+ * QUE DEBE HACER ESTE ARCHIVO:
+ * Analizar el contexto global y local de la pista: estimar la tonalidad,
+ * detectar cambios de zona en el mastil (grave vs agudo), distinguir que
+ * notas funcionan como acompanamiento frente a melodia principal y limpiar
+ * solapamientos de duracion entre notas seguidas.
+ * 
+ * muy util para resolver el problema de markov (Resuelve cómo evolucionará un sistema aleatorio en el futuro y
+ *                                                   en qué proporciones se estabilizará a largo plazo, 
+ *                                                  basándose únicamente en su estado presente y en las 
+ *                                                      probabilidades de cambio entre estados.)
+ */
 #ifndef ANALIZADOR_CONTEXTUAL_H
 #define ANALIZADOR_CONTEXTUAL_H
 

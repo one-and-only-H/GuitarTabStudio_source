@@ -1,3 +1,22 @@
+/*
+ * ARCHIVO: candidatos.h
+ *
+ * CONTEXTO DE LO QUE YA SE TIENE:
+ * Ya existen las estructuras de notas, eventos armonicos y posiciones en el
+ * mastil (tipos.h y tipos_mapper.h), junto con la afinacion estandar de las
+ * 6 cuerdas.
+ *
+ * HERRAMIENTAS A USAR:
+ * "tipos.h", "tipos_mapper.h", <vector>, <array>, <string> y <algorithm>.
+ *
+ * QUE DEBE HACER ESTE ARCHIVO:
+ * Generar todas las combinaciones validas de cuerda y traste para tocar cada
+ * nota o acorde en el diapason, priorizando formas estandar de la biblioteca
+ * CAGED (acordes abiertos y cejillas basicas) y descartando posiciones con
+ * aperturas de mano fisicamente imposibles.
+ */
+
+
 
 
 #ifndef CANDIDATOS_H
@@ -27,17 +46,6 @@
 //  0 = cuerda al aire
 // >0 = traste pisado
 
-
-
-// ============================================================
-// BIBLIOTECA DE FORMAS
-// ============================================================
-
-// Contiene formas originales.
-// Las transposiciones se generan durante la evaluación.
-
-
-
 // ============================================================
 // UTILIDADES
 // ============================================================
@@ -64,10 +72,10 @@ inline int trasteEnCuerda(
 // COSTO MELÓDICO
 // ============================================================
 
-// Evalúa una posición individual.
+// Evalúa una posición individual
 //
-// C_t: altura del traste.
-// C_c: preferencia por la cuerda.
+// C_t: altura del traste
+// C_c: preferencia por la cuerda
 //
 // La preferencia por cuerda tiene peso 0 por defecto.
 
@@ -104,10 +112,10 @@ inline double costoMelodico(
 
 // Evalúa un voicing mediante:
 //
-// C_t: altura promedio de los trastes.
-// C_e: extensión de la mano.
-// C_d: distribución de las cuerdas.
-// C_f: similitud con formas conocidas.
+// C_t: altura promedio de los trastes
+// C_e: extensión de la mano
+// C_d: distribución de las cuerdas
+// C_f: similitud con formas conocidas
 //
 // Los cuatro componentes se combinan con los pesos
 // definidos en ConfigMapper.
@@ -346,7 +354,7 @@ inline std::vector<CandidatoMelodico> generarCandidatosMelodicos(
     for (int i = 0; i < 6; i++) {
 
         if (i >= static_cast<int>(config.afinacion.size())) {
-            break;
+            break;// ya me aburri de usar static cast
         }
 
         int cuerda = i + 1;
@@ -440,7 +448,7 @@ namespace detalleCandidatos {
 
 
     // El candidato con mayor costo queda en la cima
-    // de la priority_queue.
+    // de la priority_queue
 
     struct ComparadorCosto {
 
@@ -464,7 +472,7 @@ namespace detalleCandidatos {
 
 
 //que funcion tan frustrante
-//you should really try and do all of this in the main.cpp, 
+//- you should really try and do all of this in the main.cpp
 inline std::vector<CandidatoVoicing> generarCandidatosArmonicos(
     const EventoArmonico& evento,
     const ConfigMapper& config
@@ -594,7 +602,7 @@ inline std::vector<CandidatoVoicing> generarCandidatosArmonicos(
                         return a.cuerda < b.cuerda;
                     }
                 );
-
+                // fah
                 candidato.costo = costoArmonico(
                     candidato.posiciones,
                     config,
@@ -668,7 +676,7 @@ inline std::vector<CandidatoVoicing> generarCandidatosArmonicos(
     );
 
 
-    // Conservar únicamente los 50 mejores por defecto.
+    // Conservar únicamente los 50 mejores por defecto. no creo q llegue a 50 pero igual
 
     if (resultado.size() >
         static_cast<size_t>(maxConservados)) {
