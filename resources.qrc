@@ -1,7 +1,7 @@
 <RCC>
     <qresource prefix="/icons">
         <file alias="GuitarTabStudio_logo.png">
-            assets/icons/GuitarTabStudio_logo.png
+            assets/icons/GuitarTabStudio_logo_transparent(1).png
         </file>
     </qresource>
 </RCC>
