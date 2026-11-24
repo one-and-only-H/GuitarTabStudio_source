@@ -24,14 +24,14 @@ QString encontrarRaizProyecto()
 {
     QDir dir(QCoreApplication::applicationDirPath());
     for (int i = 0; i < 6; ++i) {
-        if (dir.exists("scripts/midi2csv.py")) {
+        if (dir.exists("scripts/midi2csv.exe") || dir.exists("scripts/midi2csv.py")) {
             return dir.absolutePath();
         }
         if (!dir.cdUp()) {
             break;
         }
     }
-    return "C:/Users/SANDRA/Documents/guitarTabCreator/GuitarTabCreator";
+    return QCoreApplication::applicationDirPath();
 }
 
 float mapearRango(int valor, int inMin, int inMax, float outMin, float outMax)

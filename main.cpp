@@ -26,9 +26,27 @@ int main(int argc, char* argv[])
     (void)argc;
     (void)argv;
 
-    std::string archivoMIDI = "C:/Users/SANDRA/Documents/guitarTabCreator/Audio files/test_boulevard_of_broken_dreams.mid";
-    std::string carpetaSongs = "C:/Users/SANDRA/Documents/guitarTabCreator/GuitarTabCreator/songs";
-    std::string scriptPython = "C:/Users/SANDRA/Documents/guitarTabCreator/GuitarTabCreator/scripts/midi2csv.py";
+   fs::path raiz = fs::current_path();
+    for (int i = 0; i < 6; ++i) {
+        if (fs::exists(raiz / "scripts" / "midi2csv.py")) {
+            break;
+        }
+        if (!raiz.has_parent_path() || raiz == raiz.parent_path()) {
+            raiz = fs::current_path();
+            break;
+        }
+        raiz = raiz.parent_path();
+    }
+
+    std::string carpetaSongs = (raiz / "songs").generic_string();
+    std::string scriptPython = (raiz / "scripts" / "midi2csv.py").generic_string();
+
+    // Busca primero dentro de songs/ (portable) y si no esta, en ../Audio files/ (tu entorno local)
+    fs::path midiEnSongs = raiz / "songs" / "test_boulevard_of_broken_dreams.mid";
+    fs::path midiLocal   = raiz.parent_path() / "Audio files" / "test_boulevard_of_broken_dreams.mid";
+    std::string archivoMIDI = fs::exists(midiEnSongs)
+        ? midiEnSongs.generic_string()
+        : midiLocal.generic_string();
 
     if (!fs::exists(archivoMIDI)) {
         std::cerr << "ERROR: No se encuentra el archivo MIDI en:\n" << archivoMIDI << "\n";
@@ -38,7 +56,6 @@ int main(int argc, char* argv[])
         std::cerr << "ERROR: No se encuentra el script Python en:\n" << scriptPython << "\n";
         return 1;
     }
-
     fs::create_directories(carpetaSongs);
 
     std::cout << "1. Ejecutando script de Python...\n";
