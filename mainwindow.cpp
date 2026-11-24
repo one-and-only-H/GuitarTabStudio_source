@@ -50,7 +50,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
     setWindowTitle("GuitarTabStudio 1.0");
-    setWindowIcon(QIcon(":/icons/GuitarTabStudio_logo(1).png"));
+    setWindowIcon(QIcon(":/icons/GuitarTabStudio_logo.png"));
     configurarVisorYScroll();
     configurarControlesDSP();
 
