@@ -5,18 +5,19 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFont>
+#include <QIcon>
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QProcess>
-#include <QScrollBar>
 #include <QRegularExpression>
+#include <QScrollBar>
 #include <QTextStream>
 #include <algorithm>
 #include <cmath>
-#include <QIcon>
 
 namespace {
 
@@ -48,6 +49,15 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    // Iconos de botones de transporte y ventana principal
+    const QSize iconSize(32, 32);
+    ui->Play_button->setIcon(QIcon(":/icons/play.png"));
+    ui->Pause_button->setIcon(QIcon(":/icons/pause.png"));
+    ui->Stop_button->setIcon(QIcon(":/icons/stop.png"));
+    ui->Play_button->setIconSize(iconSize);
+    ui->Pause_button->setIconSize(iconSize);
+    ui->Stop_button->setIconSize(iconSize);
 
     setWindowTitle("GuitarTabStudio 1.0");
     setWindowIcon(QIcon(":/icons/GuitarTabStudio_logo.png"));
@@ -231,12 +241,14 @@ void MainWindow::onAbrirCancion()
     const QString ext = info.suffix().toLower();
 
     if (ext == "mid" || ext == "midi") {
+        const QString exeConversor = raiz + "/scripts/midi2csv.exe";
         const QString scriptPython = raiz + "/scripts/midi2csv.py";
-        if (!QFile::exists(scriptPython)) {
+
+        if (!QFile::exists(exeConversor) && !QFile::exists(scriptPython)) {
             QMessageBox::critical(
                 this,
-                "Script no encontrado",
-                "No se encontró scripts/midi2csv.py en:\n" + scriptPython
+                "Conversor no encontrado",
+                "No se encontró midi2csv.exe ni midi2csv.py en:\n" + raiz + "/scripts/"
             );
             return;
         }
@@ -245,7 +257,11 @@ void MainWindow::onAbrirCancion()
 
         QProcess proceso;
         proceso.setWorkingDirectory(raiz);
-        proceso.start("python", QStringList() << "-u" << scriptPython << rutaSeleccionada);
+        if (QFile::exists(exeConversor)) {
+            proceso.start(exeConversor, QStringList() << rutaSeleccionada);
+        } else {
+            proceso.start("python", QStringList() << "-u" << scriptPython << rutaSeleccionada);
+        }
 
         if (!proceso.waitForFinished(15000) || proceso.exitCode() != 0) {
             const QString err = QString::fromUtf8(proceso.readAllStandardError());
@@ -254,7 +270,7 @@ void MainWindow::onAbrirCancion()
             QMessageBox::critical(
                 this,
                 "Error al convertir MIDI",
-                "No se pudo ejecutar midi2csv.py:\n" + (err.isEmpty() ? out : err)
+                "No se pudo ejecutar el conversor MIDI:\n" + (err.isEmpty() ? out : err)
             );
             return;
         }
