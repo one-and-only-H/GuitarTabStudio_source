@@ -15,6 +15,9 @@ if hasattr(sys.stderr, "reconfigure"):
 
 
 def instalar_pretty_midi():
+    # Si corre compilado como .exe, no intentar lanzar pip con sys.executable
+    if getattr(sys, "frozen", False):
+        return
     try:
         import pretty_midi  # noqa: F401
     except ImportError:
@@ -151,9 +154,16 @@ def midi_a_csvs(ruta_midi, carpeta_salida):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Uso: python midi2csv.py <archivo.mid>", file=sys.stderr, flush=True)
+        print("Uso: midi2csv <archivo.mid>", file=sys.stderr, flush=True)
         sys.exit(1)
 
     archivo_midi = sys.argv[1]
-    carpeta_songs = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'songs')
+
+    # En modo --onefile, __file__ apunta a %TEMP%; sys.executable apunta a scripts/midi2csv.exe
+    if getattr(sys, "frozen", False):
+        dir_base = os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        dir_base = os.path.dirname(os.path.abspath(__file__))
+
+    carpeta_songs = os.path.abspath(os.path.join(dir_base, '..', 'songs'))
     midi_a_csvs(archivo_midi, carpeta_songs)
