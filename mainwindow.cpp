@@ -38,7 +38,8 @@
 #include <algorithm>
 #include <cmath>
 //salve deepseek y salve gemini
-//gpt me ha decepcionado
+
+
 namespace {
 
 QString encontrarRaizProyecto()
@@ -71,13 +72,20 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
     // Iconos de botones de transporte y ventana principal
-    const QSize iconSize(32, 32);
+    // Iconos de botones de transporte, pastillas y ventana principal
+    const QSize iconSize(36, 36);
     ui->Play_button->setIcon(QIcon(":/icons/play.png"));
     ui->Pause_button->setIcon(QIcon(":/icons/pause.png"));
     ui->Stop_button->setIcon(QIcon(":/icons/stop.png"));
     ui->Play_button->setIconSize(iconSize);
     ui->Pause_button->setIconSize(iconSize);
     ui->Stop_button->setIconSize(iconSize);
+
+    const QSize pickupIconSize(96, 60);
+    ui->Single_Coil_select->setIcon(QIcon(":/icons/single_coil.png"));
+    ui->Humbucker_select->setIcon(QIcon(":/icons/humbucker.png"));
+    ui->Single_Coil_select->setIconSize(pickupIconSize);
+    ui->Humbucker_select->setIconSize(pickupIconSize);
 
     setWindowTitle("GuitarTabStudio 1.0");
     setWindowIcon(QIcon(":/icons/GuitarTabStudio_logo.png"));

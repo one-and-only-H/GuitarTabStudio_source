@@ -4,5 +4,8 @@
         <file alias="play.png">assets/icons/play.png</file>
         <file alias="pause.png">assets/icons/pause.png</file>
         <file alias="stop.png">assets/icons/stop.png</file>
+        <file alias="single_coil.png">assets/icons/single_coil.png</file>
+        <file alias="humbucker.png">assets/icons/humbucker.png</file>
+        <file alias="pedal_chorus.png">assets/icons/pedal_chorus.png</file>
     </qresource>
 </RCC>
