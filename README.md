@@ -43,6 +43,7 @@ GuitarTabCreator/
 │
 ├── assets/
 │   └── icons/               # Iconos PNG de los controles de transporte
+|   └── intro/               # Archivos de la animación de la intro de la app
 ├── scripts/
 │   └── midi2csv.py          # Conversor de MIDI a CSV y metadatos (.meta)
 ├── songs/                   # Archivos generados (.csv y .meta); puede incluir MIDI de prueba
@@ -63,6 +64,8 @@ GuitarTabCreator/
 ├── tab_generator.h / .cpp   # Formateo de tablatura ASCII por compases y .txt
 ├── audio_player.h / .cpp    # Síntesis, efectos DSP y salida waveOut
 │
+├── intro_splash.h / .cpp    # código de la animación
+├── app_icon.rc              # Para mostrar el Icono en el buscador de archivos
 ├── resources.qrc            # Recursos gráficos embebidos en el binario
 ├── CMakeLists.txt           # Configuración de compilación
 └── mainwindow.h / .cpp/.ui  # Interfaz gráfica en Qt 6
