@@ -16,6 +16,8 @@ set(TS_FILES GuitarTabCreator_es_CO.ts)
 
 set(PROJECT_SOURCES
         main.cpp
+        intro_splash.cpp
+        intro_splash.h
         mainwindow.cpp
         mainwindow.h
         mainwindow.ui

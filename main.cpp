@@ -144,6 +144,7 @@ int main(int argc, char* argv[])
 #else
 //=======================================
 // ---main build ---
+#include "intro_splash.h"
 #include "mainwindow.h"
 
 #include <QApplication>
@@ -168,6 +169,10 @@ int main(int argc, char *argv[])
             break;
         }
     }
+
+    // Mostrar la intro animada y musical antes de abrir la interfaz principal.
+    IntroSplash intro;
+    intro.exec();
 
     MainWindow w;
     w.show();

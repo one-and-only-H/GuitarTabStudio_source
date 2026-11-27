@@ -8,4 +8,7 @@
         <file alias="humbucker.png">assets/icons/humbucker.png</file>
         <file alias="pedal_chorus.png">assets/icons/pedal_chorus.png</file>
     </qresource>
+    <qresource prefix="/intro">
+        <file alias="intro_chords.wav">assets/intro/intro_chords.wav</file>
+    </qresource>
 </RCC>
