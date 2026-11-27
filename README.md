@@ -18,6 +18,7 @@ El proyecto combina tres áreas principales: **teoría musical** (análisis arm�
 7. [Decisiones de Diseño](#decisiones-de-diseño)
 8. [Estado de los Módulos](#estado-de-los-módulos)
 9. [Limitaciones y Trabajo Futuro](#limitaciones-y-trabajo-futuro)
+10. [Glosario musical y técnico](docs/glosario.md)
 
 ---
 
