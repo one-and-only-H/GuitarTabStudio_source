@@ -50,6 +50,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(GuitarTabCreator
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        app_icon.rc
     )
 
     qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
