@@ -39,6 +39,7 @@ namespace Mapper {
 // ============================================================
 // BLOQUE 1: CONSTRUCCIÓN DEL CONTEXTO
 // ============================================================
+// Filtra, ordena y agrupa las notas para preparar acordes y tonalidad antes del mapeo
 SongContext construirContexto(const std::vector<Nota>& notasRaw) {
     SongContext ctx;
     ctx.config = ConfigMapper();
@@ -70,6 +71,7 @@ SongContext construirContexto(const std::vector<Nota>& notasRaw) {
 // ============================================================
 // BLOQUE 2: CONSTRUCCIÓN DE LA TIMELINE (NOTA POR NOTA)
 // ============================================================
+// Crea los instantes únicos de tiempo y reúne en cada uno las notas que atacan y el acorde activo
 std::vector<InstanteTimeline> construirTimeline(const SongContext& ctx) {
     std::vector<InstanteTimeline> timeline;
     if (ctx.notas.empty()) return timeline;
@@ -127,6 +129,7 @@ std::vector<InstanteTimeline> construirTimeline(const SongContext& ctx) {
 // BLOQUE 3: ORQUESTADOR
 // ============================================================
 
+// Coordina el contexto, los motores melódico y armónico, y fusiona sus resultados finales
 ResultadoMapeo mapear(const std::vector<Nota>& notasRaw) {
 
     // 1. Construir contexto global.

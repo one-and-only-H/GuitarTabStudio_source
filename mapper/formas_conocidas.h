@@ -25,7 +25,7 @@ struct FormaConocida {
 // ------------------------------------------------------------
 
 //un poquito más y le metemos algebra lineal
-
+// Devuelve la biblioteca fija de formas de acordes para reutilizarla en los análisis
 inline const std::vector<FormaConocida>& obtenerFormasConocidas() {
     static const std::vector<FormaConocida> formas = {
         // ====================================================

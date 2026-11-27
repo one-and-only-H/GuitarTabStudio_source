@@ -32,6 +32,7 @@ namespace MotorArmonico {
 // Resuelve los voicings de los eventos armónicos del timeline.
 // Cada evento genera una capa de candidatos.
 // Viterbi selecciona la secuencia de voicings con menor costo global.
+// Genera candidatos para cada acorde y usa Viterbi para escoger el voicing más estable
 inline std::vector<ResultadoArmonico> mapear(
     const std::vector<Mapper::InstanteTimeline>& timeline,
     const ConfigMapper& config

@@ -82,6 +82,7 @@ struct NotaAtaque {
 // UTILIDADES
 // ============================================================
 
+// Convierte un pitch MIDI en su clase de altura entre 0 y 11
 inline int pitchClass(int pitch) {
     int resultado = pitch % 12;
 
@@ -91,6 +92,7 @@ inline int pitchClass(int pitch) {
     return resultado;
 }
 
+// Ordena temporalmente los pitches y cuenta cuántos valores diferentes aparecen
 inline int contarPitchesDistintos(
     const std::vector<int>& pitches
 ) {
@@ -131,6 +133,7 @@ struct PlantillaArpegio {
 // Las cuerdas abiertas no pueden desplazarse a trastes
 // negativos, por lo que limitan las transposiciones posibles.
 
+// Genera copias válidas de las formas conocidas desplazadas dentro del mástil
 inline std::vector<PlantillaArpegio> generarPlantillas(
     const ConfigMapper& config
 ) {
@@ -244,6 +247,7 @@ inline std::vector<PlantillaArpegio> generarPlantillas(
 // DIRECCIÓN DEL PATRÓN
 // ============================================================
 
+// Examina una secuencia y dice si sube, baja o mezcla movimientos
 inline DireccionPatron obtenerDireccion(
     const std::vector<int>& pitches
 ) {
@@ -271,6 +275,7 @@ inline DireccionPatron obtenerDireccion(
     return DireccionPatron::MIXTO;
 }
 
+// Cuenta cuántas veces una secuencia cambia de subida a bajada o viceversa
 inline int contarCambiosDireccion(
     const std::vector<int>& pitches
 ) {
@@ -308,6 +313,7 @@ inline int contarCambiosDireccion(
 // COMPARACIÓN CON UNA FORMA
 // ============================================================
 
+// Comprueba si todos los pitches de la ventana aparecen en la plantilla
 inline bool coincideConPlantilla(
     const std::vector<int>& pitches,
     const PlantillaArpegio& plantilla
@@ -335,6 +341,7 @@ inline bool coincideConPlantilla(
 // CONFIANZA
 // ============================================================
 
+// Mide qué tan bien cubre un patrón de ataques una plantilla conocida
 inline double calcularConfianza(
     const std::vector<int>& pitches,
     const PlantillaArpegio& plantilla
@@ -372,6 +379,7 @@ inline double calcularConfianza(
     return cobertura * factorDireccion;
 }
 
+// Comprueba si dos patrones usan los mismos instantes y los mismos pitches
 inline bool sonEquivalentes(
     const PatronDetectado& a,
     const PatronDetectado& b
@@ -385,6 +393,7 @@ inline bool sonEquivalentes(
 // DETECCIÓN
 // ============================================================
 
+// Busca ventanas de ataques que encajen con formas transpuestas y devuelve los patrones únicos
 inline std::vector<PatronDetectado> detectar(
     const std::vector<Mapper::InstanteTimeline>& timeline,
     const ConfigMapper& configMapper,

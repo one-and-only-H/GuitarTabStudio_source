@@ -32,6 +32,7 @@
 
 namespace AnalizadorContextual {
 
+// Calcula el valor central de una lista de pitches y usa el valor de 60 si está vacía
 inline int calcularMediana(std::vector<int> pitches) {
     if (pitches.empty())
         return 60;
@@ -50,6 +51,7 @@ inline int calcularMediana(std::vector<int> pitches) {
     );
 }
 
+// Divide el tiempo de la canción en bloques y calcula el registro medio de cada bloque
 inline ContextoTemporal analizar(
     const std::vector<Nota>& notas,
     double duracionBloque = 20.0

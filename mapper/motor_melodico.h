@@ -40,6 +40,7 @@
 
 namespace MotorMelodico {
 
+// Ajusta el costo local de una posición según si encaja en un patrón de arpegio detectado
 inline double calcularCostoArpegio(
     std::size_t indiceTimeline,
     const Nota& nota,
@@ -94,11 +95,7 @@ inline double calcularCostoArpegio(
 
     return mejorAjuste;
 }
-// Resuelve la posición de las notas melódicas del timeline.
-// Si coinciden varias notas melódicas en un instante,
-// conserva la más aguda, manteniendo el comportamiento monofónico.
-
-
+// Genera posiciones melódicas y usa Viterbi para elegir la secuencia más cómoda
 inline std::vector<ResultadoMelodico> mapear(
     const std::vector<Mapper::InstanteTimeline>& timeline,
     const ConfigMapper& config,

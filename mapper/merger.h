@@ -16,6 +16,7 @@ namespace Merger {
 // ============================================================
 
 // Comprueba si dos notas ocupan exactamente la misma posición.
+// Compara la cuerda y el traste para saber si dos notas están en el mismo sitio
 inline bool mismaPosicion(
     const Mapper::TabNote& a,
     const Mapper::TabNote& b
@@ -26,6 +27,7 @@ inline bool mismaPosicion(
 
 // Inserta una nota si su posición todavía no está ocupada
 // dentro del evento.
+// Añade una nota al evento solo cuando no existe otra en su misma cuerda y traste
 inline void insertarNota(
     Mapper::TabEvent& evento,
     const Mapper::TabNote& nota
@@ -44,6 +46,7 @@ inline void insertarNota(
 }
 
 // Actualiza el intervalo temporal del evento según sus notas.
+// Amplía el inicio y el fin del evento para cubrir el intervalo de la nota recibida
 inline void actualizarTiempo(
     Mapper::TabEvent& evento,
     const Mapper::TabNote& nota
@@ -69,6 +72,7 @@ inline void actualizarTiempo(
 }
 
 // Busca el rol original de una nota dentro del evento armónico.
+// Recupera el rol guardado del pitch; si no aparece, lo marca como parte del acorde
 inline Role obtenerRol(
     const EventoArmonico& evento,
     int pitch
@@ -82,6 +86,7 @@ inline Role obtenerRol(
 }
 
 // Comprueba si un pitch aparece en un voicing.
+// Revisa todas las posiciones del candidato para detectar si contiene el pitch indicado
 inline bool contienePitch(
     const CandidatoVoicing& candidato,
     int pitch
@@ -100,6 +105,7 @@ inline bool contienePitch(
 // ============================================================
 
 // Convierte un resultado melódico a TabNote.
+// Copia la nota original y su posición elegida al formato usado por la tablatura
 inline Mapper::TabNote convertirMelodico(
     const ResultadoMelodico& resultado
 ) {
@@ -119,6 +125,7 @@ inline Mapper::TabNote convertirMelodico(
 }
 
 // Convierte una posición armónica a TabNote.
+// Convierte una posición de un voicing armónico en una TabNote conservando su rol
 inline Mapper::TabNote convertirArmonico(
     const ResultadoArmonico& resultado,
     const PosicionGuitarra& posicion
@@ -146,6 +153,7 @@ inline Mapper::TabNote convertirArmonico(
 // 3. FUSIÓN PRINCIPAL
 // ============================================================
 
+// Junta las notas melódicas y armónicas en eventos ordenados y evita posiciones duplicadas
 inline Mapper::ResultadoMapeo fusionar(
     const std::vector<Mapper::InstanteTimeline>& timeline,
     const std::vector<ResultadoMelodico>& melodicos,

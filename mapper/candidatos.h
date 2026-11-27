@@ -54,6 +54,7 @@
 //
 // -1 significa que la cuerda no participa en el voicing.
 
+// Busca el traste asignado a una cuerda y devuelve -1 si la cuerda no se usa
 inline int trasteEnCuerda(
     const std::vector<PosicionGuitarra>& posiciones,
     int cuerda
@@ -79,6 +80,7 @@ inline int trasteEnCuerda(
 //
 // La preferencia por cuerda tiene peso 0 por defecto.
 
+// Calcula cuánto cuesta tocar una posición individual según traste y cuerda
 inline double costoMelodico(
     const PosicionGuitarra& pos,
     const ConfigMapper& config
@@ -120,6 +122,7 @@ inline double costoMelodico(
 // Los cuatro componentes se combinan con los pesos
 // definidos en ConfigMapper.
 
+// Evalúa un voicing usando altura, extensión, distribución, forma conocida y saltos
 inline double costoArmonico(
     const std::vector<PosicionGuitarra>& posiciones,
     const ConfigMapper& config,
@@ -339,6 +342,7 @@ inline double costoArmonico(
 // El caller debe asignarlo según el índice de la nota
 // dentro de InstanteMapper::notas_activas.
 
+// Busca todas las cuerdas y trastes posibles para una nota y conserva las mejores posiciones
 inline std::vector<CandidatoMelodico> generarCandidatosMelodicos(
     const Nota& nota,
     const ConfigMapper& config
@@ -414,6 +418,7 @@ namespace detalleCandidatos {
 
     // Genera todas las posiciones posibles para un pitch.
 
+    // Recorre las seis cuerdas y devuelve las posiciones válidas del pitch dentro del mástil
     inline std::vector<PosicionGuitarra> posicionesParaPitch(
         int pitch,
         const ConfigMapper& config
@@ -452,6 +457,7 @@ namespace detalleCandidatos {
 
     struct ComparadorCosto {
 
+        // Ordena la cola para que el candidato con mayor costo quede primero
         bool operator()(
             const CandidatoVoicing& a,
             const CandidatoVoicing& b
@@ -473,6 +479,7 @@ namespace detalleCandidatos {
 
 //que funcion tan frustrante
 //- you should really try and do all of this in the main.cpp
+// Combina una posición distinta por nota y conserva los mejores voicings armónicos
 inline std::vector<CandidatoVoicing> generarCandidatosArmonicos(
     const EventoArmonico& evento,
     const ConfigMapper& config

@@ -101,6 +101,7 @@ struct ResultadoMapeo {
 // La nota más grave del acorde se vuelve BAJO.
 // Las que pertenecen al acorde son ACORDE.
 // Las que no pertenecen son MELODIA.
+// Revisa las notas del instante y etiqueta cada una según su relación con el acorde activo
 inline void asignarRoles(InstanteTimeline& inst) {
     bool esAcordeValido =
         inst.acorde.has_value() &&
@@ -144,6 +145,7 @@ inline void asignarRoles(InstanteTimeline& inst) {
 
 // Dado un instante, devuelve las notas que deben pasarse
 // por Viterbi melódico (las que son MELODIA y atacan).
+// Filtra del instante las notas atacadas que fueron etiquetadas como melodía
 inline std::vector<Nota> obtenerNotasMelodicasAtacadas(
     const InstanteTimeline& inst) {
     std::vector<Nota> res;
@@ -155,6 +157,7 @@ inline std::vector<Nota> obtenerNotasMelodicasAtacadas(
 
 // Dado un instante, devuelve las notas que deben pasarse
 // por Viterbi armónico (las que no son MELODIA y atacan).
+// Filtra del instante las notas atacadas que pertenecen al acorde o al bajo
 inline std::vector<Nota> obtenerNotasArmonicasAtacadas(
     const InstanteTimeline& inst) {
     std::vector<Nota> res;
@@ -170,6 +173,7 @@ inline std::vector<Nota> obtenerNotasArmonicasAtacadas(
 
 // Para notas armónicas atacadas, construimos un evento
 // que representa el "voicing libre" a optimizar.
+// Crea un EventoArmonico con las notas dadas y conserva los datos del acorde original si existen
 inline EventoArmonico construirEventoDeNotas(
     const std::vector<Nota>& notas,
     const std::optional<EventoArmonico>& acordeOriginal) {
@@ -199,6 +203,7 @@ inline EventoArmonico construirEventoDeNotas(
 // ------------------------------------------------------------
 
 // Convierte un CandidatoVoicing a TabNotes.
+// Convierte cada posición de una postura armónica en una nota preparada para la tablatura
 inline std::vector<TabNote> convertirCandidatoATabNotes(
     const CandidatoVoicing& cand,
     double timestamp,
@@ -222,14 +227,14 @@ inline std::vector<TabNote> convertirCandidatoATabNotes(
 // 3. DECLARACIONES (lo que va en el .cpp)
 // ============================================================
 
-// Normaliza notas, agrupa acordes, detecta tonalidad y resuelve solapamientos
+// Normaliza las notas, reconoce los acordes y prepara el contexto global para el proceso
 SongContext construirContexto(const std::vector<Nota>& notasRaw);
 
-// Divide la canción en instantes con notas activas, sostenidas y acorde
+// Divide la canción en instantes donde se buscan las notas atacadas, sostenidas y el acorde activo
 std::vector<InstanteTimeline> construirTimeline(const SongContext& ctx);
 
 
-// Orquestador principal
+// Ejecuta todo el flujo y devuelve la tablatura con las capas melódica y armónica fusionadas
 ResultadoMapeo mapear(const std::vector<Nota>& notasRaw);
 
 } // namespace Mapper

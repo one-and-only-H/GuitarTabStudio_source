@@ -22,6 +22,7 @@ namespace detalleViterbi {
     // Distancia normalizada entre dos posiciones melódicas
     // --------------------------------------------------------
 
+    // Calcula el costo de pasar de una posición melódica a otra usando traste, cuerda y sustain
     inline double costoTransicionMelodica(
         const CandidatoMelodico& anterior,
         const CandidatoMelodico& actual,
@@ -115,6 +116,7 @@ namespace detalleViterbi {
     // Calcula el centro de un voicing
     // --------------------------------------------------------
 
+    // Obtiene el traste medio del voicing ignorando las cuerdas al aire
     inline double centroTrastes(
     const CandidatoVoicing& candidato
 ) {
@@ -143,6 +145,7 @@ namespace detalleViterbi {
 }
 
 
+    // Obtiene la cuerda media ocupada por las posiciones de un voicing
     inline double centroCuerdas(
         const CandidatoVoicing& candidato
     ) {
@@ -164,6 +167,7 @@ namespace detalleViterbi {
     // Distancia entre dos voicings
     // --------------------------------------------------------
 
+    // Calcula el costo de cambiar entre dos posturas armónicas comparando notas y centros
     inline double costoTransicionArmonica(
         const CandidatoVoicing& anterior,
         const CandidatoVoicing& actual,
@@ -273,6 +277,7 @@ namespace detalleViterbi {
     //
     // Devuelve el índice del candidato elegido en cada instante.
 
+    // Ejecuta el algoritmo general de Viterbi usando costos locales y de transición dados
     template <typename Candidato, typename ObtenerCosto,
               typename ObtenerTransicion>
 
@@ -422,6 +427,7 @@ namespace detalleViterbi {
 //
 // Devuelve el índice del candidato elegido en cada instante.
 
+// Resuelve una secuencia melódica conservando el ancla de la mano y el estado de cada cuerda
 inline std::vector<int> resolverViterbiMelodico(
     const std::vector<std::vector<CandidatoMelodico>>& candidatos,
     const std::vector<Nota>& notasOriginales,
@@ -713,6 +719,7 @@ inline std::vector<int> resolverViterbiMelodico(
 //
 // Devuelve el índice del voicing elegido en cada evento.
 
+// Llama al Viterbi general con el costo local y el costo de transición armónico
 inline std::vector<int> resolverViterbiArmonico(
     const std::vector<std::vector<CandidatoVoicing>>& candidatos,
     const ConfigMapper& config
